@@ -1,0 +1,58 @@
+:root {
+  /* Cores */
+  --color-bg: #f6f7f4;
+  --color-surface: #ffffff;
+  --color-text: #18221d;
+  --color-text-secondary: #526259;
+  --color-border: #dce3dd;
+  /* Borda de controles de formulário (contraste mínimo de 3:1 com a superfície) */
+  --color-border-strong: #6f7f76;
+  --color-primary: #206a4a;
+  --color-primary-hover: #1a5a3e;
+  --color-primary-contrast: #ffffff;
+  --color-focus-bg: #e6f3eb;
+  --color-warning: #8a4b09;
+  --color-warning-bg: #fff2db;
+  --color-danger: #b42318;
+  --color-danger-hover: #971c12;
+  --color-danger-bg: #fdece8;
+  --color-overlay: rgb(24 34 29 / 0.45);
+
+  /* Marcadores de listas (sempre acompanhados do nome) */
+  --list-green: #2e7d5b;
+  --list-blue: #2f6fb5;
+  --list-violet: #7a4fb3;
+  --list-amber: #b26a00;
+  --list-pink: #c2417a;
+  --list-gray: #667169;
+
+  /* Espaçamento */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Forma */
+  --radius: 12px;
+  --radius-panel: 16px;
+  --shadow-sm: 0 1px 2px rgb(24 34 29 / 0.06);
+  --shadow-panel: 0 8px 28px rgb(24 34 29 / 0.16);
+
+  /* Tipografia */
+  --font-sans: ui-sans-serif, 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --text-base: 1rem;
+  --text-title: 1.75rem;
+  --text-section: 1.125rem;
+  --text-meta: 0.875rem;
+
+  /* Layout */
+  --tap: 44px;
+  --sidebar-width: 240px;
+  --content-max: 960px;
+  --editor-width: 400px;
+  --mobile-nav-height: 64px;
+  --header-height: 56px;
+  --fab-size: 56px;
+}

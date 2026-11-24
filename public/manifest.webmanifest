@@ -1,0 +1,23 @@
+{
+  "name": "Clareia - suas tarefas",
+  "short_name": "Clareia",
+  "description": "Organize suas tarefas, escolha o foco do dia e acompanhe o que foi feito.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "./#/hoje",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F6F7F4",
+  "theme_color": "#F6F7F4",
+  "categories": ["productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Hoje", "url": "./#/hoje", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Entrada", "url": "./#/entrada", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

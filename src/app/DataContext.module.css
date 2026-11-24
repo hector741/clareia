@@ -1,0 +1,30 @@
+.centered {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  color: var(--color-text-secondary);
+}
+
+.errorBox {
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-panel);
+  color: var(--color-text);
+}
+
+.errorBox h1 {
+  font-size: var(--text-section);
+  color: var(--color-danger);
+}
+
+.detail {
+  font-size: var(--text-meta);
+  color: var(--color-text-secondary);
+}

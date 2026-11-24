@@ -1,0 +1,26 @@
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.green {
+  background: var(--list-green);
+}
+.blue {
+  background: var(--list-blue);
+}
+.violet {
+  background: var(--list-violet);
+}
+.amber {
+  background: var(--list-amber);
+}
+.pink {
+  background: var(--list-pink);
+}
+.gray {
+  background: var(--list-gray);
+}
