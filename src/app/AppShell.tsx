@@ -3,6 +3,7 @@ import { CalendarDays, Inbox, Menu, MoreHorizontal, Plus, Search, Sun, X } from 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, matchPath, useLocation } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
+import { PomodoroPanel } from '../features/pomodoro/PomodoroPanel';
 import dialogStyles from '../components/ui/Dialog.module.css';
 import { todayLocal } from '../domain/dates';
 import { useEditor } from './EditorContext';
@@ -122,6 +123,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+
+      <PomodoroPanel />
 
       {mode === 'mobile' ? (
         <>

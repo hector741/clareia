@@ -1,4 +1,4 @@
-import { SCHEMA_VERSION, MAX_FOCUS, type Settings, type Task, type TaskList } from '../domain/types';
+import { SCHEMA_VERSION, MAX_FOCUS, type FocusSession, type Settings, type Task, type TaskList } from '../domain/types';
 import { authFailure } from './authErrors';
 import type { AuthApi, AuthEvent, AuthUser, Backend, Remote, Snapshot } from './types';
 import { readUrlIntent } from './urlIntent';
@@ -31,10 +31,16 @@ export interface MemoryControls {
 interface Data {
   tasks: Task[];
   lists: TaskList[];
+  focusSessions: FocusSession[];
   settings: Settings;
 }
 
-const emptyData = (): Data => ({ tasks: [], lists: [], settings: { id: 'app', schemaVersion: SCHEMA_VERSION } });
+const emptyData = (): Data => ({
+  tasks: [],
+  lists: [],
+  focusSessions: [],
+  settings: { id: 'app', schemaVersion: SCHEMA_VERSION },
+});
 
 function dbError(message: string, code: string): Error {
   return Object.assign(new Error(message), { code });
@@ -44,7 +50,12 @@ export function createMemoryRemote(kv: KeyValue, userId: () => string, controls:
   const key = () => `clareia-memory:data:${userId()}`;
   const load = (): Data => {
     const raw = kv.get(key());
-    return raw ? (JSON.parse(raw) as Data) : emptyData();
+    return raw ? { ...emptyData(), ...(JSON.parse(raw) as Partial<Data>) } : emptyData();
+  };
+  const sessionTaskExists = (data: Data, session: FocusSession) => {
+    if (!data.tasks.some((t) => t.id === session.taskId)) {
+      throw dbError('insert or update on table "focus_sessions" violates foreign key constraint', '23503');
+    }
   };
   const store = (data: Data) => kv.set(key(), JSON.stringify(data));
   const write = async <T>(fn: (data: Data) => T): Promise<T> => {
@@ -87,6 +98,13 @@ export function createMemoryRemote(kv: KeyValue, userId: () => string, controls:
     deleteTask: (id) =>
       write((data) => {
         data.tasks = data.tasks.filter((t) => t.id !== id);
+        data.focusSessions = data.focusSessions.filter((s) => s.taskId !== id);
+      }),
+    saveFocusSession: (session) =>
+      write((data) => {
+        if (data.focusSessions.some((s) => s.id === session.id)) return;
+        sessionTaskExists(data, session);
+        data.focusSessions.push(session);
       }),
     saveList: (list) =>
       write((data) => {
@@ -116,17 +134,23 @@ export function createMemoryRemote(kv: KeyValue, userId: () => string, controls:
           if (t) t.position = index + 1;
         });
       }),
-    importData: (lists, tasks, replace) =>
+    importData: (lists, tasks, replace, focusSessions = []) =>
       write((data) => {
         if (replace) {
           data.tasks = [];
           data.lists = [];
+          data.focusSessions = [];
         }
         for (const l of lists) if (!data.lists.some((x) => x.id === l.id)) data.lists.push(l);
         for (const t of tasks) {
           if (data.tasks.some((x) => x.id === t.id)) continue;
           assertTask(data, t);
           data.tasks.push(t);
+        }
+        for (const s of focusSessions) {
+          if (data.focusSessions.some((x) => x.id === s.id)) continue;
+          sessionTaskExists(data, s);
+          data.focusSessions.push(s);
         }
       }),
     saveSettings: (settings) =>

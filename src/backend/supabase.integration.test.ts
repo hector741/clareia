@@ -130,4 +130,44 @@ describe.skipIf(!url || users.length < 2)('Supabase real', () => {
     await other.repo.restoreBackup(backup);
     expect(other.store.getState().tasks).toHaveLength(backup.tasks.length);
   });
+
+  it('sessões de foco: registro sem duplicar, isolamento entre contas, backup e exclusão em cascata', async () => {
+    const task = await a.repo.createTask(emptyTaskInput({ title: 'Pomodoro real' }));
+    const session = {
+      id: crypto.randomUUID(),
+      taskId: task.id,
+      kind: 'pomodoro' as const,
+      durationSeconds: 1500,
+      endedAt: '2026-11-24T14:25:00.000Z',
+    };
+    const extra = { ...session, id: crypto.randomUUID(), kind: 'extra' as const, durationSeconds: 600 };
+    await a.repo.recordFocusSession(session);
+    await a.repo.recordFocusSession(extra);
+    // Outro aparelho repetindo o mesmo registro não duplica.
+    await b.remote.saveFocusSession(session);
+    await b.repo.refresh();
+    expect(b.store.getFocusSessions(task.id).map((s) => s.id).sort()).toEqual([session.id, extra.id].sort());
+    expect(b.store.getTask(task.id)?.status).toBe('pending');
+
+    // Outra conta não vê, não apaga e não registra em tarefa alheia.
+    await other.repo.refresh();
+    expect(other.store.getFocusSessions(task.id)).toHaveLength(0);
+    const del = await other.client.from('focus_sessions').delete().eq('id', session.id).select();
+    expect(del.data ?? []).toHaveLength(0);
+    await expect(other.remote.saveFocusSession({ ...session, id: crypto.randomUUID() })).rejects.toBeTruthy();
+    const anon = await newClient().from('focus_sessions').select('*');
+    expect(anon.error !== null || (anon.data ?? []).length === 0).toBe(true);
+
+    // Backup leva as sessões e a restauração as traz de volta.
+    const backup = await a.repo.exportBackup();
+    expect(backup.focusSessions?.map((s) => s.id)).toEqual(expect.arrayContaining([session.id, extra.id]));
+    await a.repo.restoreBackup(backup);
+    expect(a.store.getFocusSessions(task.id)).toHaveLength(2);
+
+    // Excluir a tarefa definitivamente apaga as sessões no banco.
+    await a.repo.trashTask(task.id);
+    await a.repo.deleteTaskForever(task.id);
+    const left = await a.client.from('focus_sessions').select('id').eq('task_id', task.id);
+    expect(left.data ?? []).toHaveLength(0);
+  });
 });

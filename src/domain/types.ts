@@ -47,6 +47,19 @@ export interface TaskList {
   updatedAt: IsoInstant;
 }
 
+/** `pomodoro`: sessão de foco completa. `extra`: tempo adicional mais curto, pedido ao continuar. */
+export const FOCUS_KINDS = ['pomodoro', 'extra'] as const;
+export type FocusKind = (typeof FOCUS_KINDS)[number];
+
+/** Sessão de foco que chegou ao fim (sessões encerradas antes da hora não são registradas). */
+export interface FocusSession {
+  id: string;
+  taskId: string;
+  kind: FocusKind;
+  durationSeconds: number;
+  endedAt: IsoInstant;
+}
+
 export interface Settings {
   id: 'app';
   schemaVersion: number;
@@ -59,6 +72,8 @@ export interface BackupFile {
   exportedAt: IsoInstant;
   lists: TaskList[];
   tasks: Task[];
+  /** Ausente em backups anteriores ao Pomodoro. */
+  focusSessions?: FocusSession[];
   settings: Settings;
 }
 

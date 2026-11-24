@@ -1,4 +1,4 @@
-import type { Subtask, Task, TaskList } from '../domain/types';
+import type { FocusSession, Subtask, Task, TaskList } from '../domain/types';
 
 /** Linhas como o PostgREST devolve (snake_case; timestamptz com fuso; date como YYYY-MM-DD). */
 export interface TaskRow {
@@ -83,6 +83,34 @@ export function listFromRow(row: ListRow): TaskList {
     position: row.position,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
+  };
+}
+
+export interface FocusSessionRow {
+  id: string;
+  task_id: string;
+  kind: FocusSession['kind'];
+  duration_seconds: number;
+  ended_at: string;
+}
+
+export function focusSessionFromRow(row: FocusSessionRow): FocusSession {
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    kind: row.kind,
+    durationSeconds: row.duration_seconds,
+    endedAt: iso(row.ended_at),
+  };
+}
+
+export function focusSessionToRow(session: FocusSession): FocusSessionRow {
+  return {
+    id: session.id,
+    task_id: session.taskId,
+    kind: session.kind,
+    duration_seconds: session.durationSeconds,
+    ended_at: session.endedAt,
   };
 }
 

@@ -77,7 +77,7 @@ export function InstallPanel() {
           <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.
         </p>
       )}
-      <p>Os dados continuam neste aparelho, no mesmo espaço do navegador.</p>
+      <p>Os dados continuam na sua conta e aparecem também no app instalado.</p>
     </section>
   );
 }

@@ -2,6 +2,7 @@ import type { Remote } from '../backend/types';
 import { validateBackup } from '../domain/backup';
 import { todayLocal } from '../domain/dates';
 import {
+  focusSessionSchema,
   listInputSchema,
   taskInputSchema,
   type ListInput,
@@ -14,6 +15,7 @@ import {
   MAX_FOCUS,
   SCHEMA_VERSION,
   type BackupFile,
+  type FocusSession,
   type Settings,
   type Subtask,
   type Task,
@@ -311,11 +313,32 @@ export function createRepository(store: DataStore, remote: Remote, clock: () => 
       if (current.deletedAt === null) {
         throw new AppError('invalid_state', 'Só tarefas da Lixeira podem ser excluídas definitivamente.');
       }
+      const sessions = store.getFocusSessions(id);
       store.removeTask(id);
       try {
         await enqueue(() => remote.deleteTask(id));
       } catch (error) {
         store.putTask(current);
+        store.putFocusSessions(sessions);
+        throw toAppError(error);
+      }
+    },
+
+    /* ---------------------------- Sessões de foco --------------------------- */
+
+    /**
+     * Registra uma sessão de foco que chegou ao fim. O `id` vem da própria sessão,
+     * então repetir o registro (outra aba, nova tentativa) não duplica a contagem.
+     */
+    async recordFocusSession(input: FocusSession): Promise<void> {
+      const session = parseOrThrow(focusSessionSchema, input);
+      if (store.getState().focusSessions.some((s) => s.id === session.id)) return;
+      if (!store.getTask(session.taskId)) throw new AppError('not_found', 'Esta tarefa não existe mais.');
+      store.putFocusSessions([session]);
+      try {
+        await enqueue(() => remote.saveFocusSession(session));
+      } catch (error) {
+        store.removeFocusSession(session.id);
         throw toAppError(error);
       }
     },
@@ -408,13 +431,14 @@ export function createRepository(store: DataStore, remote: Remote, clock: () => 
     async exportBackup(): Promise<BackupFile> {
       return wrap(async () => {
         await idle();
-        const { tasks, lists, settings } = store.getState();
+        const { tasks, lists, focusSessions, settings } = store.getState();
         return {
           app: 'clareia' as const,
           schemaVersion: SCHEMA_VERSION,
           exportedAt: stamp(),
           lists: [...lists].sort((a, b) => a.position - b.position),
           tasks: [...tasks],
+          focusSessions: [...focusSessions].sort((a, b) => a.endedAt.localeCompare(b.endedAt)),
           settings,
         };
       });
@@ -430,7 +454,7 @@ export function createRepository(store: DataStore, remote: Remote, clock: () => 
       const data = checked.backup;
       await wrap(async () => {
         await idle();
-        await enqueue(() => remote.importData(data.lists, data.tasks, true));
+        await enqueue(() => remote.importData(data.lists, data.tasks, true, data.focusSessions ?? []));
         store.replace(await remote.fetchAll());
       });
     },

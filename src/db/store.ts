@@ -1,14 +1,16 @@
-import { SCHEMA_VERSION, type Settings, type Task, type TaskList } from '../domain/types';
+import { SCHEMA_VERSION, type FocusSession, type Settings, type Task, type TaskList } from '../domain/types';
 
 export interface StoreState {
   tasks: Task[];
   lists: TaskList[];
+  focusSessions: FocusSession[];
   settings: Settings;
 }
 
 const initial = (): StoreState => ({
   tasks: [],
   lists: [],
+  focusSessions: [],
   settings: { id: 'app', schemaVersion: SCHEMA_VERSION },
 });
 
@@ -63,8 +65,13 @@ export class DataStore {
     this.putTasks([task]);
   }
 
+  /** Remove a tarefa e, como no banco, as sessões de foco dela. */
   removeTask(id: string): void {
-    this.set({ ...this.state, tasks: this.state.tasks.filter((t) => t.id !== id) });
+    this.set({
+      ...this.state,
+      tasks: this.state.tasks.filter((t) => t.id !== id),
+      focusSessions: this.state.focusSessions.filter((s) => s.taskId !== id),
+    });
   }
 
   putList(list: TaskList): void {
@@ -74,6 +81,22 @@ export class DataStore {
 
   removeList(id: string): void {
     this.set({ ...this.state, lists: this.state.lists.filter((l) => l.id !== id) });
+  }
+
+  getFocusSessions(taskId: string): FocusSession[] {
+    return this.state.focusSessions.filter((s) => s.taskId === taskId);
+  }
+
+  /** Acrescenta sessões ainda desconhecidas (registrar a mesma sessão duas vezes não duplica). */
+  putFocusSessions(sessions: FocusSession[]): void {
+    const known = new Set(this.state.focusSessions.map((s) => s.id));
+    const added = sessions.filter((s) => !known.has(s.id));
+    if (added.length === 0) return;
+    this.set({ ...this.state, focusSessions: [...this.state.focusSessions, ...added] });
+  }
+
+  removeFocusSession(id: string): void {
+    this.set({ ...this.state, focusSessions: this.state.focusSessions.filter((s) => s.id !== id) });
   }
 
   setSettings(settings: Settings): void {

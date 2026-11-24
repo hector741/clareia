@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryRemote, memoryKeyValue, type KeyValue } from '../backend/memory';
 import { parseBackupText } from '../domain/backup';
 import { emptyTaskInput, taskToInput } from '../domain/taskInput';
-import { FOCUS_LIMIT_MESSAGE, type BackupFile } from '../domain/types';
+import { FOCUS_LIMIT_MESSAGE, type BackupFile, type FocusSession } from '../domain/types';
 import { AppError } from './errors';
 import { createRepository } from './repository';
 import { DataStore } from './store';
@@ -477,6 +477,77 @@ describe('backup: exportar e restaurar', () => {
     const bad = { app: 'clareia', schemaVersion: 1, exportedAt: 'x', lists: [], tasks: [], settings: {} } as unknown as BackupFile;
     await expectCode(repo.restoreBackup(bad), 'validation');
     expect(await server()).toHaveLength(1);
+  });
+});
+
+describe('sessões de foco (Pomodoro)', () => {
+  const session = (taskId: string, over: Partial<FocusSession> = {}): FocusSession => ({
+    id: crypto.randomUUID(),
+    taskId,
+    kind: 'pomodoro',
+    durationSeconds: 1500,
+    endedAt: '2026-11-24T13:25:00.000Z',
+    ...over,
+  });
+
+  it('registra na conta sem concluir a tarefa, e repetir o registro não duplica', async () => {
+    const { repo, remote, store, local } = setup();
+    const task = await repo.createTask(emptyTaskInput({ title: 'Escrever' }));
+    const s = session(task.id);
+    await repo.recordFocusSession(s);
+    await repo.recordFocusSession(s);
+    expect(store.getState().focusSessions).toEqual([s]);
+    expect((await remote.fetchAll()).focusSessions).toEqual([s]);
+    expect(local()[0]?.status).toBe('pending');
+    // Outra aba/aparelho tentando gravar a mesma sessão também não duplica no servidor.
+    await remote.saveFocusSession(s);
+    expect((await remote.fetchAll()).focusSessions).toHaveLength(1);
+  });
+
+  it('falha de conexão desfaz o registro local e devolve erro de rede', async () => {
+    const { repo, store, controls } = setup();
+    const task = await repo.createTask(emptyTaskInput({ title: 'Escrever' }));
+    controls.failWrites = true;
+    await expectCode(repo.recordFocusSession(session(task.id)), 'network');
+    expect(store.getState().focusSessions).toEqual([]);
+  });
+
+  it('recusa sessão de tarefa inexistente ou fora do formato', async () => {
+    const { repo } = setup();
+    const task = await repo.createTask(emptyTaskInput({ title: 'a' }));
+    await expectCode(repo.recordFocusSession(session(crypto.randomUUID())), 'not_found');
+    await expectCode(repo.recordFocusSession(session(task.id, { durationSeconds: 10 })), 'validation');
+  });
+
+  it('excluir a tarefa definitivamente apaga as sessões dela', async () => {
+    const { repo, remote, store } = setup();
+    const task = await repo.createTask(emptyTaskInput({ title: 'a' }));
+    await repo.recordFocusSession(session(task.id));
+    await repo.trashTask(task.id);
+    await repo.deleteTaskForever(task.id);
+    expect(store.getState().focusSessions).toEqual([]);
+    expect((await remote.fetchAll()).focusSessions).toEqual([]);
+  });
+
+  it('o backup leva as sessões; backups antigos, sem sessões, continuam válidos', async () => {
+    const src = setup();
+    const task = await src.repo.createTask(emptyTaskInput({ title: 'a' }));
+    const s1 = session(task.id);
+    const s2 = session(task.id, { kind: 'extra', durationSeconds: 600 });
+    await src.repo.recordFocusSession(s1);
+    await src.repo.recordFocusSession(s2);
+    const backup = await src.repo.exportBackup();
+    expect(backup.focusSessions).toHaveLength(2);
+
+    const dst = setup();
+    await dst.repo.restoreBackup(backup);
+    expect(dst.store.getState().focusSessions.map((s) => s.id).sort()).toEqual([s1.id, s2.id].sort());
+
+    const legacy: Partial<BackupFile> = { ...backup };
+    delete legacy.focusSessions;
+    expect(parseBackupText(JSON.stringify(legacy), TODAY).ok).toBe(true);
+    const orphan = { ...backup, focusSessions: [session(crypto.randomUUID())] };
+    expect(parseBackupText(JSON.stringify(orphan), TODAY).ok).toBe(false);
   });
 });
 

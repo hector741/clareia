@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { repo, store, toAppError } from '../db';
-import type { Task, TaskList } from '../domain/types';
+import type { FocusSession, Task, TaskList } from '../domain/types';
 import { Button } from '../components/ui/Button';
 import styles from './DataContext.module.css';
 
@@ -8,6 +8,7 @@ interface DataValue {
   tasks: Task[];
   lists: TaskList[];
   listsById: Map<string, TaskList>;
+  focusSessions: FocusSession[];
 }
 
 const DataContext = createContext<DataValue | null>(null);
@@ -75,8 +76,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       tasks: state.tasks,
       lists: state.lists,
       listsById: new Map(state.lists.map((l) => [l.id, l])),
+      focusSessions: state.focusSessions,
     }),
-    [state.tasks, state.lists],
+    [state.tasks, state.lists, state.focusSessions],
   );
 
   if (load.status === 'loading') {

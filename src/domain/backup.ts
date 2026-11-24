@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { settingsSchema, taskListSchema, taskSchema } from './schemas';
+import { focusSessionSchema, settingsSchema, taskListSchema, taskSchema } from './schemas';
 import { countFocused } from './today';
 import {
   MAX_BACKUP_BYTES,
@@ -15,6 +15,7 @@ const backupSchema: z.ZodType<BackupFile> = z.strictObject({
   exportedAt: z.iso.datetime({ offset: true }),
   lists: z.array(taskListSchema),
   tasks: z.array(taskSchema),
+  focusSessions: z.array(focusSessionSchema).optional(),
   settings: settingsSchema,
 });
 
@@ -35,7 +36,8 @@ const MAX_REPORTED_ERRORS = 8;
 function formatPath(path: readonly PropertyKey[]): string {
   if (path.length === 0) return 'arquivo';
   const [root, index, ...rest] = path;
-  const rootLabel = root === 'tasks' ? 'Tarefa' : root === 'lists' ? 'Lista' : String(root);
+  const rootLabel =
+    root === 'tasks' ? 'Tarefa' : root === 'lists' ? 'Lista' : root === 'focusSessions' ? 'Sessão de foco' : String(root);
   if (typeof index === 'number') {
     const tail = rest.length ? ` (${rest.map(String).join('.')})` : '';
     return `${rootLabel} nº ${index + 1}${tail}`;
@@ -89,6 +91,14 @@ export function validateBackup(data: unknown, today: DateString): BackupParseRes
     taskIds.add(task.id);
     if (task.listId !== null && !listIds.has(task.listId)) {
       errors.push(`Tarefa nº ${i + 1} ("${task.title}"): aponta para uma lista que não existe no arquivo.`);
+    }
+  }
+  const sessionIds = new Set<string>();
+  for (const [i, session] of (backup.focusSessions ?? []).entries()) {
+    if (sessionIds.has(session.id)) errors.push(`Sessão de foco nº ${i + 1}: ID duplicado (${session.id}).`);
+    sessionIds.add(session.id);
+    if (!taskIds.has(session.taskId)) {
+      errors.push(`Sessão de foco nº ${i + 1}: aponta para uma tarefa que não existe no arquivo.`);
     }
   }
   if (countFocused(backup.tasks, today) > MAX_FOCUS) {

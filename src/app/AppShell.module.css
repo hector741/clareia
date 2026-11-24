@@ -96,6 +96,25 @@
   padding-bottom: calc(var(--mobile-nav-height) + var(--fab-size) + var(--space-6) + env(safe-area-inset-bottom));
 }
 
+/* Painel do Pomodoro visível: o conteúdo e o botão flutuante abrem espaço para ele. */
+:global(html[data-timer='on']) .main {
+  padding-bottom: calc(var(--timer-panel-height) + var(--space-6));
+}
+
+:global(html[data-timer='on']) .mobile .main {
+  padding-bottom: calc(
+    var(--mobile-nav-height) + var(--timer-bar-height) + var(--fab-size) + var(--space-6) +
+      env(safe-area-inset-bottom)
+  );
+}
+
+:global(html[data-timer='on']) .fab {
+  bottom: calc(
+    var(--mobile-nav-height) + var(--space-2) + var(--timer-bar-height) + var(--space-3) +
+      env(safe-area-inset-bottom)
+  );
+}
+
 .appBarAction {
   display: inline-flex;
   align-items: center;

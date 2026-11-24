@@ -16,6 +16,17 @@
   bottom: calc(var(--mobile-nav-height) + var(--fab-size) + var(--space-5) + env(safe-area-inset-bottom));
 }
 
+:global(html[data-timer='on']) .region {
+  bottom: calc(var(--timer-panel-height) + var(--space-6) + env(safe-area-inset-bottom));
+}
+
+:global(html[data-timer='on'][data-layout='mobile']) .region {
+  bottom: calc(
+    var(--mobile-nav-height) + var(--timer-bar-height) + var(--fab-size) + var(--space-5) +
+      env(safe-area-inset-bottom)
+  );
+}
+
 .stack {
   display: flex;
   flex-direction: column;

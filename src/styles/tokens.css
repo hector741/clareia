@@ -55,4 +55,7 @@
   --mobile-nav-height: 64px;
   --header-height: 56px;
   --fab-size: 56px;
+  /* Espaço reservado para o painel do Pomodoro (cartão no computador, barra no celular). */
+  --timer-panel-height: 176px;
+  --timer-bar-height: 64px;
 }

@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
+import { setPageTitle } from './documentTitle';
 
 export function usePageTitle(title: string): void {
   useEffect(() => {
-    document.title = `${title} · Clareia`;
+    setPageTitle(`${title} · Clareia`);
   }, [title]);
 }

@@ -3,6 +3,7 @@ import { AccountPanel } from '../../features/account/AccountPanel';
 import { LegacyImportSection } from '../../features/account/LegacyImport';
 import { BackupPanel } from '../../features/backup/BackupPanel';
 import { InstallPanel } from '../../features/install/InstallPanel';
+import { PomodoroSettings } from '../../features/pomodoro/PomodoroSettings';
 import { usePageTitle } from '../usePageTitle';
 import styles from './page.module.css';
 
@@ -15,6 +16,8 @@ export function SettingsPage() {
       <AccountPanel />
 
       <LegacyImportSection />
+
+      <PomodoroSettings />
 
       <section className={styles.card} aria-labelledby="scope-title">
         <h2 id="scope-title">Onde ficam seus dados</h2>

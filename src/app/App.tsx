@@ -3,6 +3,7 @@ import { AppShell } from './AppShell';
 import { ConfirmProvider } from './ConfirmContext';
 import { backend } from '../backend';
 import { LegacyImportPrompt } from '../features/account/LegacyImport';
+import { PomodoroProvider } from '../features/pomodoro/PomodoroContext';
 import { AuthGate } from './AuthGate';
 import { EditorProvider } from './EditorContext';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -27,9 +28,10 @@ export function App() {
       <FeedbackProvider>
         <AuthGate backend={backend}>
           <TodayProvider>
-              <HashRouter>
-                <ConfirmProvider>
-                  <EditorProvider>
+            <HashRouter>
+              <ConfirmProvider>
+                <EditorProvider>
+                  <PomodoroProvider>
                     <AppShell>
                       <Routes>
                         <Route path="/" element={<Navigate to="/hoje" replace />} />
@@ -45,11 +47,12 @@ export function App() {
                         <Route path="*" element={<NotFoundPage />} />
                       </Routes>
                     </AppShell>
-                  </EditorProvider>
-                </ConfirmProvider>
-              </HashRouter>
-            </TodayProvider>
-            <LegacyImportPrompt />
+                  </PomodoroProvider>
+                </EditorProvider>
+              </ConfirmProvider>
+            </HashRouter>
+          </TodayProvider>
+          <LegacyImportPrompt />
         </AuthGate>
       </FeedbackProvider>
     </ErrorBoundary>

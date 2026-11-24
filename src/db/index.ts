@@ -15,6 +15,7 @@ const offlineRemote: Remote = {
   deleteList: unavailable,
   setPositions: unavailable,
   importData: unavailable,
+  saveFocusSession: unavailable,
   saveSettings: unavailable,
 };
 

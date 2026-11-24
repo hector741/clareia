@@ -25,6 +25,7 @@ import { formatRelativeDate } from '../../domain/dates';
 import { isFocusedOn, isOverdue, needsReplan } from '../../domain/today';
 import { PRIORITY_LABELS, type Task } from '../../domain/types';
 import { ColorDot } from '../lists/ColorDot';
+import { FocusBadges, TimerButton } from '../pomodoro/TaskTimer';
 import { useTaskActions } from './useTaskActions';
 import styles from './TaskRow.module.css';
 
@@ -122,6 +123,7 @@ export const TaskRow = memo(function TaskRow({ task, showList = false, manual }:
               {task.subtasks.length === 1 ? 'etapa' : 'etapas'}
             </li>
           ) : null}
+          <FocusBadges task={task} />
           {completed && task.completedOn ? (
             <li className={styles.badge}>
               <Check size={14} aria-hidden="true" /> Concluída {formatRelativeDate(task.completedOn, today)}
@@ -134,7 +136,9 @@ export const TaskRow = memo(function TaskRow({ task, showList = false, manual }:
         <Button variant="secondary" icon={<RotateCcw size={16} />} onClick={() => void actions.reopen(task)}>
           Reabrir
         </Button>
-      ) : null}
+      ) : (
+        <TimerButton task={task} />
+      )}
 
       <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger asChild>

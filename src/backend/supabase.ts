@@ -1,7 +1,17 @@
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
 import { SCHEMA_VERSION } from '../domain/types';
 import { authFailure, toAuthFailure } from './authErrors';
-import { listFromRow, listToRow, taskFromRow, taskToRow, type ListRow, type TaskRow } from './mapping';
+import {
+  focusSessionFromRow,
+  focusSessionToRow,
+  listFromRow,
+  listToRow,
+  taskFromRow,
+  taskToRow,
+  type FocusSessionRow,
+  type ListRow,
+  type TaskRow,
+} from './mapping';
 import type { AuthApi, AuthEvent, AuthUser, Backend, Remote, Snapshot } from './types';
 import { readUrlIntent } from './urlIntent';
 
@@ -17,7 +27,7 @@ export function createSupabaseRemote(client: SupabaseClient): Remote {
     if (error) throw error;
   };
 
-  async function fetchRows<T>(table: 'tasks' | 'lists'): Promise<T[]> {
+  async function fetchRows<T>(table: 'tasks' | 'lists' | 'focus_sessions'): Promise<T[]> {
     const rows: T[] = [];
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await client
@@ -33,9 +43,10 @@ export function createSupabaseRemote(client: SupabaseClient): Remote {
 
   return {
     async fetchAll(): Promise<Snapshot> {
-      const [taskRows, listRows, settingsResult] = await Promise.all([
+      const [taskRows, listRows, sessionRows, settingsResult] = await Promise.all([
         fetchRows<TaskRow>('tasks'),
         fetchRows<ListRow>('lists'),
+        fetchRows<FocusSessionRow>('focus_sessions'),
         client.from('user_settings').select('last_export_generated_at').maybeSingle(),
       ]);
       check(settingsResult.error);
@@ -44,6 +55,7 @@ export function createSupabaseRemote(client: SupabaseClient): Remote {
       return {
         tasks: taskRows.map(taskFromRow),
         lists: listRows.map(listFromRow).sort((a, b) => a.position - b.position),
+        focusSessions: sessionRows.map(focusSessionFromRow),
         settings: {
           id: 'app',
           schemaVersion: SCHEMA_VERSION,
@@ -72,12 +84,19 @@ export function createSupabaseRemote(client: SupabaseClient): Remote {
       const { error } = await client.rpc('set_task_positions', { p_ids: ids });
       check(error);
     },
-    async importData(lists, tasks, replace) {
+    async importData(lists, tasks, replace, focusSessions = []) {
       const { error } = await client.rpc('import_data', {
         p_lists: lists.map(listToRow),
         p_tasks: tasks.map(taskToRow),
         p_replace: replace,
+        p_sessions: focusSessions.map(focusSessionToRow),
       });
+      check(error);
+    },
+    async saveFocusSession(session) {
+      const { error } = await client
+        .from('focus_sessions')
+        .upsert(focusSessionToRow(session), { onConflict: 'user_id,id', ignoreDuplicates: true });
       check(error);
     },
     async saveSettings(settings) {

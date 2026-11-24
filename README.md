@@ -61,6 +61,22 @@ Na primeira vez que usar os testes de ponta a ponta, instale o navegador do Play
 - **Excluir:** **Mover para a Lixeira** é reversível (**Restaurar**). **Excluir definitivamente** pede confirmação e não tem volta.
 - **Buscar:** **Busca** pesquisa em título, descrição e etapas, sem diferenciar maiúsculas ou acentos (“reuniao” encontra “Reunião”), com filtros de lista, prioridade, situação e prazo combinados.
 
+### Pomodoro
+
+- **Iniciar:** o botão de temporizador na linha da tarefa (ícone de cronômetro, “Iniciar foco”) começa uma sessão de foco. Padrões: 25 min de foco, 5 min de pausa curta e 15 min de pausa longa depois de 4 Pomodoros completos. Ajuste em **Configurações → Pomodoro**.
+- **Durante a sessão:** um painel fica visível em todas as telas (cartão no canto, no computador; barra acima da navegação, no celular) com a tarefa, o tempo restante, o anel de progresso, a etapa (Foco, Pausa curta, Pausa longa, Pausado, escrita por extenso e não só pela cor) e quantos Pomodoros a tarefa já tem. Há **Pausar**, **Retomar** e **Encerrar**; encerrar antes da hora pede confirmação e não conta como Pomodoro. O título da aba mostra o tempo.
+- **Um temporizador por vez:** iniciar o foco em outra tarefa pergunta antes. **Pausar e trocar** guarda a sessão atual, pausada, para retomar depois. **Encerrar e trocar** descarta a sessão atual.
+- **Quando o tempo acaba:** toca um sino suave e aparece o aviso “O tempo de foco terminou. Você concluiu esta tarefa?”. Ele oferece três caminhos:
+  - **Concluir tarefa:** conclui e oferece uma pausa.
+  - **Continuar tarefa:** pausa, mais um Pomodoro, ou 5 ou 10 min extras.
+  - **Decidir depois:** a tarefa fica pendente.
+
+  O fim do tempo **nunca** conclui a tarefa sozinho. Ao fim da pausa, o aviso diz que dá para retomar a tarefa. A próxima etapa só começa com uma ação sua.
+- **Contagem:** cada sessão que chega ao fim é registrada na conta (tabela `focus_sessions`) e aparece na linha da tarefa, por exemplo “3 Pomodoros · +10 min extra”. O tempo extra é contado à parte. Sessões interrompidas não contam.
+- **Som e notificações:** em Configurações você controla o volume, silencia ou ouve uma prévia do sino. Também pode **Ativar notificações**, que só são pedidas quando você clica; elas aparecem quando o Clareia está em outra aba ou minimizado. O aviso na tela aparece sempre. Se o navegador bloquear o som ou a notificação, o temporizador continua normalmente e o aviso explica o que aconteceu.
+- **Confiabilidade:** o tempo é calculado pelo horário previsto de término, não por contagem. A sessão fica salva no navegador (por conta): ao atualizar a página ela continua, pausada ou correndo. Entre abas há um único temporizador; uma trava (Web Locks) garante que só uma aba toque o sino e registre a sessão. A resposta ao aviso, dada em qualquer aba, vale para todas. Se o tempo acabar com a página fechada, o aviso aparece uma vez ao voltar, sem tocar o sino.
+- **Limitações:** o alarme só toca com o Clareia aberto (aba ou app instalado). Com o navegador fechado, nada toca, porque não existe servidor de push. Em aba oculta, o navegador pode atrasar o aviso alguns segundos; o título com o tempo e o cálculo pelo horário de término reduzem isso. No iPhone, notificações só funcionam com o app adicionado à Tela de Início. O temporizador ativo vale para o navegador onde foi iniciado e não aparece em outro aparelho; a contagem, sim. Tempos, volume e notificações são preferências deste aparelho.
+
 ### Fazer em × Prazo
 
 - **Fazer em** é a *intenção de trabalho*: o dia em que você pretende trabalhar na tarefa.
@@ -79,12 +95,12 @@ Os dois campos são independentes. **Focar hoje** define Fazer em como hoje e **
 
 Em **Configurações**:
 
-- **Exportar dados** gera `clareia-backup-AAAA-MM-DD.json` com listas, tarefas (pendentes, concluídas e na Lixeira) e etapas. O app registra “Última exportação gerada” na conta.
+- **Exportar dados** gera `clareia-backup-AAAA-MM-DD.json` com listas, tarefas (pendentes, concluídas e na Lixeira), etapas e sessões de foco. Backups antigos, sem sessões, continuam aceitos. O app registra “Última exportação gerada” na conta.
 - **Escolher arquivo de backup** valida o arquivo inteiro (até 10 MiB) antes de qualquer alteração. Se estiver válido, mostra as contagens e pede confirmação para **Substituir dados da conta**, com opção de exportar os dados atuais antes. A restauração acontece em uma única transação no banco; se algo falhar, os dados anteriores permanecem intactos. Não existe mesclagem.
 
 ## Banco de dados e login (Supabase)
 
-- **Esquema:** `supabase/migrations/20261124180000_clareia_schema.sql` cria `lists`, `tasks` e `user_settings`, cada linha ligada a `auth.users` pelo `user_id`.
+- **Esquema:** `supabase/migrations/20261124180000_clareia_schema.sql` cria `lists`, `tasks` e `user_settings`, cada linha ligada a `auth.users` pelo `user_id`. `20261124210000_focus_sessions.sql` acrescenta `focus_sessions` (Pomodoros e tempo extra por tarefa, só inserção, apagados junto com a tarefa) e inclui as sessões em `import_data`.
 - **Segurança:** RLS ativo em todas as tabelas; cada usuário só lê e altera as próprias linhas, e o papel anônimo não tem acesso. O app usa apenas a chave publicável.
 - **Regras no banco:** gatilho que impede mais de 3 tarefas em foco por dia (com trava por usuário contra gravações simultâneas) e funções `delete_list`, `set_task_positions` e `import_data`, que executam operações compostas numa única transação.
 - **Autenticação:** `supabase/auth-config.json` (endereço do site, endereços de retorno permitidos, senha mínima, confirmação de e-mail obrigatória).
@@ -129,6 +145,8 @@ src/features/tasks   captura, linha, grupos, editor e checklist
 src/features/lists   gerenciamento de listas
 src/features/backup  exportação e restauração
 src/features/install instalação na tela inicial
+src/features/pomodoro temporizador: regras (model.ts), painel, avisos, som, notificações e configurações
+public/notify-sw.js  service worker mínimo, só para notificações no celular (sem cache)
 src/db               cópia local, repositório (regras e gravação em fila) e leitura dos dados antigos (Dexie)
 src/domain           tipos, datas, schemas Zod, Hoje/foco, filtros, ordenação, backup
 src/styles           tokens e estilos globais
@@ -140,4 +158,4 @@ Stack: React + TypeScript (estrito) + Vite, CSS Modules, Radix Primitives, Lucid
 
 ## Evoluções previstas (ainda não existem)
 
-Recorrência, Kanban, calendário completo, notificações, uso offline (service worker), modo escuro, arrastar e soltar, login com Google, equipes e recursos de IA.
+Recorrência, Kanban, calendário completo, lembretes por push com o navegador fechado, uso offline (service worker), modo escuro, arrastar e soltar, login com Google, equipes e recursos de IA.

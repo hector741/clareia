@@ -1,8 +1,9 @@
-import type { Settings, Task, TaskList } from '../domain/types';
+import type { FocusSession, Settings, Task, TaskList } from '../domain/types';
 
 export interface Snapshot {
   tasks: Task[];
   lists: TaskList[];
+  focusSessions: FocusSession[];
   settings: Settings;
 }
 
@@ -18,7 +19,9 @@ export interface Remote {
   /** Grava a ordem manual: posição = índice + 1. */
   setPositions(ids: string[]): Promise<void>;
   /** Importa numa única transação. `replace` apaga tudo antes; senão acrescenta sem sobrescrever. */
-  importData(lists: TaskList[], tasks: Task[], replace: boolean): Promise<void>;
+  importData(lists: TaskList[], tasks: Task[], replace: boolean, focusSessions?: FocusSession[]): Promise<void>;
+  /** Registra uma sessão de foco concluída. Repetir o mesmo `id` não duplica o registro. */
+  saveFocusSession(session: FocusSession): Promise<void>;
   saveSettings(settings: Settings): Promise<void>;
 }
 

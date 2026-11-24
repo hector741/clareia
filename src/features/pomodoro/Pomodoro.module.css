@@ -1,0 +1,363 @@
+/* Painel do temporizador: cartão flutuante no computador, barra acima da navegação no celular. */
+.panel {
+  --phase-color: var(--color-primary);
+  position: fixed;
+  z-index: 40;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  width: min(360px, calc(100vw - 2 * var(--space-5)));
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'ring info'
+    'controls controls';
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--phase-color);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.panel[data-phase='break'] {
+  --phase-color: var(--list-blue);
+}
+
+.panel[data-paused='true'] {
+  --phase-color: var(--color-border-strong);
+}
+
+.panel:not(:has(.ring)) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'info'
+    'controls';
+}
+
+.ring {
+  grid-area: ring;
+  position: relative;
+  width: 64px;
+  height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--phase-color);
+}
+
+.ringSvg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.ringTrack {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 8;
+}
+
+.ringBar {
+  fill: none;
+  stroke: var(--phase-color);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.25s linear;
+}
+
+.ringIcon {
+  position: relative;
+}
+
+.info {
+  grid-area: info;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.phase {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-meta);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.panel[data-phase='focus'][data-paused='false'] .phase {
+  color: var(--color-primary);
+}
+
+.panel[data-phase='break'][data-paused='false'] .phase {
+  color: var(--list-blue);
+}
+
+.pausedTag {
+  display: inline-flex;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 700;
+}
+
+.time {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.task,
+.taskStatic {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.task {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .task:hover {
+    text-decoration: underline;
+  }
+}
+
+.count {
+  font-size: var(--text-meta);
+  color: var(--color-text-secondary);
+}
+
+.controls {
+  grid-area: controls;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.controls > button {
+  flex: 1;
+}
+
+.buttonLabel {
+  white-space: nowrap;
+}
+
+/* Celular: barra compacta logo acima da navegação inferior, botões só com ícone (nome acessível mantido). */
+:global(html[data-layout='mobile']) .panel {
+  left: max(var(--space-2), env(safe-area-inset-left));
+  right: max(var(--space-2), env(safe-area-inset-right));
+  bottom: calc(var(--mobile-nav-height) + var(--space-2) + env(safe-area-inset-bottom));
+  width: auto;
+  height: var(--timer-bar-height);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'ring info controls';
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+}
+
+:global(html[data-layout='mobile']) .panel:not(:has(.ring)) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'info controls';
+}
+
+:global(html[data-layout='mobile']) .ring {
+  width: 44px;
+  height: 44px;
+}
+
+/* Fase e tempo na mesma linha, tarefa embaixo: a barra cabe em --timer-bar-height. */
+:global(html[data-layout='mobile']) .info {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-2);
+  row-gap: 0;
+}
+
+:global(html[data-layout='mobile']) .info > .task,
+:global(html[data-layout='mobile']) .info > .taskStatic {
+  flex-basis: 100%;
+}
+
+:global(html[data-layout='mobile']) .phase {
+  font-size: 0.75rem;
+}
+
+:global(html[data-layout='mobile']) .time {
+  font-size: 1.25rem;
+}
+
+:global(html[data-layout='mobile']) .count {
+  display: none;
+}
+
+:global(html[data-layout='mobile']) .task {
+  min-height: 24px;
+}
+
+:global(html[data-layout='mobile']) .controls {
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+}
+
+:global(html[data-layout='mobile']) .controls > button {
+  flex: none;
+  padding: 0;
+  width: var(--tap);
+}
+
+:global(html[data-layout='mobile']) .buttonLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Aviso de fim de etapa */
+.prompt {
+  width: min(92vw, 480px);
+}
+
+.promptBadge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  font-size: var(--text-meta);
+  font-weight: 700;
+}
+
+.promptBadge[data-phase='break'] {
+  border-color: var(--list-blue);
+  color: var(--list-blue);
+}
+
+.promptNote,
+.promptStats {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: var(--space-2);
+  font-size: var(--text-meta);
+}
+
+.promptNote > svg,
+.promptStats > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.choiceList {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.choiceRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.choiceFooter {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.choiceList .promptNote {
+  margin-top: 0;
+  color: var(--color-text-secondary);
+}
+
+/* Linha da tarefa */
+.badgeTimer {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  font-weight: 700;
+}
+
+.rowTimerActive {
+  color: var(--color-primary);
+}
+
+/* Configurações */
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  align-items: end;
+  gap: var(--space-3);
+}
+
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.range {
+  width: min(100%, 240px);
+  min-height: var(--tap);
+  accent-color: var(--color-primary);
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  font-weight: 600;
+}
+
+.checkbox input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-primary);
+}
+
+.status {
+  font-size: var(--text-meta);
+  color: var(--color-text-secondary);
+}
+
+.statusWarn {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}

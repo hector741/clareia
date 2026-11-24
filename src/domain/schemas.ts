@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import { isValidDateString } from './dates';
 import {
+  FOCUS_KINDS,
   LIMITS,
   LIST_COLORS,
   PRIORITIES,
   SCHEMA_VERSION,
   TASK_STATUSES,
+  type FocusSession,
   type Settings,
   type Subtask,
   type Task,
@@ -105,6 +107,14 @@ export const taskListSchema: z.ZodType<TaskList> = z.strictObject({
   position: finiteNumber,
   createdAt: isoInstant,
   updatedAt: isoInstant,
+});
+
+export const focusSessionSchema: z.ZodType<FocusSession> = z.strictObject({
+  id: uuid,
+  taskId: uuid,
+  kind: z.enum(FOCUS_KINDS),
+  durationSeconds: z.number().int().min(60).max(4 * 60 * 60),
+  endedAt: isoInstant,
 });
 
 export const settingsSchema: z.ZodType<Settings> = z.strictObject({
