@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import { fieldErrors } from '../domain/schemas';
+import { FOCUS_LIMIT_MESSAGE } from '../domain/types';
 
 export type AppErrorCode =
   | 'validation'
@@ -7,6 +8,8 @@ export type AppErrorCode =
   | 'focus_limit'
   | 'quota'
   | 'storage'
+  | 'network'
+  | 'auth'
   | 'invalid_state';
 
 export class AppError extends Error {
@@ -21,21 +24,35 @@ export class AppError extends Error {
   }
 }
 
-/** Converte qualquer falha em AppError com mensagem em português. */
+/** Converte qualquer falha (validação, servidor, rede) em AppError com mensagem em português. */
 export function toAppError(error: unknown): AppError {
   if (error instanceof AppError) return error;
-  const name = (error as { name?: string } | null)?.name ?? '';
-  const inner = (error as { inner?: unknown } | null)?.inner;
-  const innerName = (inner as { name?: string } | null)?.name ?? '';
-  if (name === 'QuotaExceededError' || innerName === 'QuotaExceededError') {
+  const e = (error ?? {}) as { name?: string; message?: string; code?: string; status?: number };
+  const message = e.message ?? '';
+  const code = e.code ?? '';
+
+  if (message.includes('focus_limit')) return new AppError('focus_limit', FOCUS_LIMIT_MESSAGE);
+  if (e.name === 'TypeError' || /failed to fetch|networkerror|load failed/i.test(message)) {
     return new AppError(
-      'quota',
-      'O armazenamento do navegador está cheio. Libere espaço ou exporte seus dados e tente de novo. Nada foi apagado.',
+      'network',
+      'Sem conexão com o servidor. A alteração não foi salva; verifique a internet e tente de novo.',
     );
+  }
+  if (code === 'PGRST301' || code === 'PGRST303' || e.status === 401 || /jwt/i.test(message)) {
+    return new AppError('auth', 'Sua sessão expirou. Entre novamente para continuar.');
+  }
+  if (code === '23503' || code === 'P0002' || message === 'not_found') {
+    return new AppError('not_found', 'Este item não existe mais. A tela foi atualizada.');
+  }
+  if (code === '23514' || code === '22P02' || code === '22007' || code === '22008') {
+    return new AppError('validation', 'Os dados foram recusados pelo servidor por estarem fora do formato esperado.');
+  }
+  if (code === '54000' || code === '53100') {
+    return new AppError('quota', 'O espaço da conta está cheio. Nada foi alterado.');
   }
   return new AppError(
     'storage',
-    'Não foi possível gravar no armazenamento do navegador. Seus dados anteriores foram mantidos. Tente novamente.',
+    'Não foi possível salvar na sua conta. Seus dados anteriores foram mantidos. Tente novamente.',
   );
 }
 

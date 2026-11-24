@@ -1,29 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryRemote, memoryKeyValue, type KeyValue } from '../backend/memory';
 import { parseBackupText } from '../domain/backup';
 import { emptyTaskInput, taskToInput } from '../domain/taskInput';
 import { FOCUS_LIMIT_MESSAGE, type BackupFile } from '../domain/types';
-import { ClareiaDB } from './database';
 import { AppError } from './errors';
 import { createRepository } from './repository';
+import { DataStore } from './store';
 
-const opened: ClareiaDB[] = [];
-
-function setup(name = `test-${crypto.randomUUID()}`, clockRef = { now: new Date(2026, 10, 24, 10, 0, 0) }) {
-  const db = new ClareiaDB(name);
-  opened.push(db);
-  const repo = createRepository(db, () => clockRef.now);
-  return { db, repo, clockRef, name };
+/** Um "aparelho": cópia local + repositório, ligado a um servidor simulado (kv) compartilhável. */
+function setup(kv: KeyValue = memoryKeyValue(), clockRef = { now: new Date(2026, 10, 24, 10, 0, 0) }) {
+  const controls = { failWrites: false };
+  const remote = createMemoryRemote(kv, () => 'user-1', controls);
+  const store = new DataStore();
+  const repo = createRepository(store, remote, () => clockRef.now);
+  const local = () => store.getState().tasks;
+  const server = async () => (await remote.fetchAll()).tasks;
+  return { kv, clockRef, controls, remote, store, repo, local, server };
 }
 
-afterEach(async () => {
+afterEach(() => {
   vi.restoreAllMocks();
-  while (opened.length) {
-    const db = opened.pop()!;
-    db.close();
-  }
 });
 
 const TODAY = '2026-11-24';
+const focusedOn = (tasks: { focusDate: string | null }[], day: string) => tasks.filter((t) => t.focusDate === day).length;
 
 async function expectCode(promise: Promise<unknown>, code: string) {
   await expect(promise).rejects.toMatchObject({ code });
@@ -31,7 +31,7 @@ async function expectCode(promise: Promise<unknown>, code: string) {
 
 describe('tarefas: criação e validação', () => {
   it('cria uma tarefa só com o título e recusa título vazio', async () => {
-    const { repo, db } = setup();
+    const { repo, server } = setup();
     const task = await repo.createTask(emptyTaskInput({ title: '  Pagar contas  ' }));
     expect(task.title).toBe('Pagar contas');
     expect(task.listId).toBeNull();
@@ -39,7 +39,7 @@ describe('tarefas: criação e validação', () => {
     expect(task.priority).toBe('normal');
     await expectCode(repo.createTask(emptyTaskInput({ title: '   ' })), 'validation');
     await expectCode(repo.createTask(emptyTaskInput({ title: 'x'.repeat(201) })), 'validation');
-    expect(await db.tasks.count()).toBe(1);
+    expect(await server()).toHaveLength(1);
   });
 
   it('recusa datas impossíveis e lista inexistente', async () => {
@@ -74,37 +74,40 @@ describe('foco', () => {
   });
 
   it('respeita o limite de três, sem substituir silenciosamente', async () => {
-    const { repo, db } = setup();
+    const { repo, server } = setup();
     const tasks = await Promise.all([1, 2, 3, 4].map((n) => repo.createTask(emptyTaskInput({ title: `t${n}` }))));
     for (const t of tasks.slice(0, 3)) await repo.focusTask(t.id);
     const err = await repo.focusTask(tasks[3]!.id).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AppError);
     expect((err as AppError).code).toBe('focus_limit');
     expect((err as AppError).message).toBe(FOCUS_LIMIT_MESSAGE);
-    expect(await db.tasks.where('focusDate').equals(TODAY).count()).toBe(3);
-    // Retirar uma libera a vaga.
+    expect(focusedOn(await server(), TODAY)).toBe(3);
     await repo.unfocusTask(tasks[0]!.id);
     await repo.focusTask(tasks[3]!.id);
-    expect(await db.tasks.where('focusDate').equals(TODAY).count()).toBe(3);
+    expect(focusedOn(await server(), TODAY)).toBe(3);
   });
 
   it('chamadas simultâneas nunca passam de três', async () => {
-    const { repo, db } = setup();
+    const { repo, server, local } = setup();
     const tasks = await Promise.all(Array.from({ length: 6 }, (_, n) => repo.createTask(emptyTaskInput({ title: `t${n}` }))));
     const results = await Promise.allSettled(tasks.map((t) => repo.focusTask(t.id)));
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(3);
-    expect(await db.tasks.where('focusDate').equals(TODAY).count()).toBe(3);
+    expect(focusedOn(await server(), TODAY)).toBe(3);
+    expect(focusedOn(local(), TODAY)).toBe(3);
   });
 
-  it('duas abas (duas conexões ao mesmo banco) respeitam o limite', async () => {
+  it('dois aparelhos na mesma conta: o banco garante o limite e o perdedor é desfeito', async () => {
     const a = setup();
-    const b = setup(a.name, a.clockRef);
+    const b = setup(a.kv, a.clockRef);
     const tasks = await Promise.all(Array.from({ length: 6 }, (_, n) => a.repo.createTask(emptyTaskInput({ title: `t${n}` }))));
-    const results = await Promise.allSettled(
-      tasks.map((t, i) => (i % 2 === 0 ? a.repo : b.repo).focusTask(t.id)),
-    );
+    await b.repo.load();
+    const results = await Promise.allSettled(tasks.map((t, i) => (i % 2 === 0 ? a.repo : b.repo).focusTask(t.id)));
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(3);
-    expect(await a.db.tasks.where('focusDate').equals(TODAY).count()).toBe(3);
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    expect(rejected.every((r) => (r.reason as AppError).code === 'focus_limit')).toBe(true);
+    expect(focusedOn(await a.server(), TODAY)).toBe(3);
+    await b.repo.refresh();
+    expect(focusedOn(b.local(), TODAY)).toBe(3);
   });
 
   it('concluir e excluir liberam vaga; focar em concluída é recusado', async () => {
@@ -124,16 +127,16 @@ describe('foco', () => {
   });
 
   it('ao virar o dia o foco antigo deixa de valer sem apagar nada', async () => {
-    const { repo, clockRef, db } = setup();
+    const { repo, clockRef, server } = setup();
     const t = await repo.createTask(emptyTaskInput({ title: 'a' }));
     await repo.focusTask(t.id);
     clockRef.now = new Date(2026, 10, 25, 9, 0, 0);
     const others = await Promise.all([1, 2, 3].map((n) => repo.createTask(emptyTaskInput({ title: `n${n}` }))));
     for (const o of others) await repo.focusTask(o.id);
-    const old = await db.tasks.get(t.id);
+    const old = (await server()).find((x) => x.id === t.id);
     expect(old?.status).toBe('pending');
     expect(old?.focusDate).toBe(TODAY);
-    expect(await db.tasks.where('focusDate').equals('2026-11-25').count()).toBe(3);
+    expect(focusedOn(await server(), '2026-11-25')).toBe(3);
   });
 
   it('mudar Fazer em de uma tarefa em foco tira do foco e avisa', async () => {
@@ -195,10 +198,10 @@ describe('concluir e reabrir', () => {
 
 describe('exclusão e Lixeira', () => {
   it('exclusão lógica, restauração e exclusão definitiva', async () => {
-    const { repo, db } = setup();
+    const { repo, server } = setup();
     const t = await repo.createTask(emptyTaskInput({ title: 'a', description: 'd' }));
     await repo.trashTask(t.id);
-    expect((await db.tasks.get(t.id))?.deletedAt).not.toBeNull();
+    expect((await server()).find((x) => x.id === t.id)?.deletedAt).not.toBeNull();
     await expectCode(repo.updateTask(t.id, taskToInput(t)), 'invalid_state');
     await expectCode(repo.deleteTaskForever(crypto.randomUUID()), 'not_found');
     const restored = await repo.restoreTask(t.id);
@@ -207,13 +210,13 @@ describe('exclusão e Lixeira', () => {
     await expectCode(repo.deleteTaskForever(t.id), 'invalid_state');
     await repo.trashTask(t.id);
     await repo.deleteTaskForever(t.id);
-    expect(await db.tasks.get(t.id)).toBeUndefined();
+    expect(await server()).toHaveLength(0);
   });
 });
 
 describe('listas', () => {
   it('excluir lista mantém todas as tarefas (inclusive concluídas e na Lixeira) na Entrada', async () => {
-    const { repo, db } = setup();
+    const { repo, remote, local } = setup();
     const list = await repo.createList({ name: ' Casa ', color: 'blue' });
     expect(list.name).toBe('Casa');
     const a = await repo.createTask(emptyTaskInput({ title: 'a', listId: list.id }));
@@ -224,16 +227,17 @@ describe('listas', () => {
     await repo.trashTask(c.id);
     const result = await repo.deleteList(list.id);
     expect(result.movedTasks).toBe(3);
-    expect(await db.lists.count()).toBe(0);
-    const all = await db.tasks.toArray();
-    expect(all).toHaveLength(4);
-    expect(all.every((t) => t.listId === null)).toBe(true);
-    const moved = all.filter((t) => t.id !== inbox.id).map((t) => t.position);
-    expect(Math.min(...moved)).toBeGreaterThan(inbox.position);
-    expect(new Set(all.map((t) => t.position)).size).toBe(4);
-    expect(all.find((t) => t.id === a.id)?.status).toBe('pending');
-    expect(all.find((t) => t.id === b.id)?.status).toBe('completed');
-    expect(all.find((t) => t.id === c.id)?.deletedAt).not.toBeNull();
+    for (const all of [(await remote.fetchAll()).tasks, local()]) {
+      expect(all).toHaveLength(4);
+      expect(all.every((t) => t.listId === null)).toBe(true);
+      const moved = all.filter((t) => t.id !== inbox.id).map((t) => t.position);
+      expect(Math.min(...moved)).toBeGreaterThan(inbox.position);
+      expect(new Set(all.map((t) => t.position)).size).toBe(4);
+      expect(all.find((t) => t.id === a.id)?.status).toBe('pending');
+      expect(all.find((t) => t.id === b.id)?.status).toBe('completed');
+      expect(all.find((t) => t.id === c.id)?.deletedAt).not.toBeNull();
+    }
+    expect((await remote.fetchAll()).lists).toHaveLength(0);
   });
 
   it('valida nome e cor da lista', async () => {
@@ -258,29 +262,101 @@ describe('listas', () => {
 });
 
 describe('ordem manual', () => {
-  it('mover para cima e para baixo troca apenas vizinhos pendentes', async () => {
-    const { repo, db } = setup();
-    const a = await repo.createTask(emptyTaskInput({ title: 'a' }));
-    const b = await repo.createTask(emptyTaskInput({ title: 'b' }));
+  it('mover para cima e para baixo troca apenas vizinhos pendentes, aqui e no servidor', async () => {
+    const { repo, local, server } = setup();
+    await repo.createTask(emptyTaskInput({ title: 'a' }));
+    await repo.createTask(emptyTaskInput({ title: 'b' }));
     const c = await repo.createTask(emptyTaskInput({ title: 'c' }));
+    const a = local().find((t) => t.title === 'a')!;
+    const b = local().find((t) => t.title === 'b')!;
     const done = await repo.createTask(emptyTaskInput({ title: 'concluida' }));
     await repo.completeTask(done.id);
-    const order = async () =>
-      (await db.tasks.toArray())
+    const order = (tasks: ReturnType<typeof local>) =>
+      tasks
         .filter((t) => t.status === 'pending')
         .sort((x, y) => x.position - y.position)
         .map((t) => t.title);
-    expect(await order()).toEqual(['a', 'b', 'c']);
+    expect(order(local())).toEqual(['a', 'b', 'c']);
     await repo.reorderTask(c.id, 'up');
-    expect(await order()).toEqual(['a', 'c', 'b']);
+    expect(order(local())).toEqual(['a', 'c', 'b']);
     await repo.reorderTask(a.id, 'down');
-    expect(await order()).toEqual(['c', 'a', 'b']);
-    await repo.reorderTask(c.id, 'up'); // já é o primeiro
-    expect(await order()).toEqual(['c', 'a', 'b']);
-    await repo.reorderTask(b.id, 'down'); // já é o último
-    expect(await order()).toEqual(['c', 'a', 'b']);
+    expect(order(local())).toEqual(['c', 'a', 'b']);
+    await repo.reorderTask(c.id, 'up');
+    await repo.reorderTask(b.id, 'down');
+    expect(order(local())).toEqual(['c', 'a', 'b']);
+    expect(order(await server())).toEqual(['c', 'a', 'b']);
   });
 });
+
+describe('gravação na nuvem', () => {
+  it('sem conexão: a alteração aparece, é desfeita e o erro é de rede', async () => {
+    const { repo, controls, local, server } = setup();
+    const kept = await repo.createTask(emptyTaskInput({ title: 'existente' }));
+    controls.failWrites = true;
+    const pending = repo.createTask(emptyTaskInput({ title: 'não vai gravar' }));
+    expect(local().map((t) => t.title)).toContain('não vai gravar');
+    await expectCode(pending, 'network');
+    expect(local().map((t) => t.title)).toEqual(['existente']);
+    const completing = repo.completeTask(kept.id);
+    expect(local()[0]?.status).toBe('completed');
+    await expectCode(completing, 'network');
+    expect(local()[0]?.status).toBe('pending');
+    controls.failWrites = false;
+    await repo.createTask(emptyTaskInput({ title: 'agora grava' }));
+    expect((await server()).map((t) => t.title).sort()).toEqual(['agora grava', 'existente']);
+  });
+
+  it('atualização em segundo plano traz o que outro aparelho gravou', async () => {
+    const a = setup();
+    const b = setup(a.kv, a.clockRef);
+    await b.repo.load();
+    await a.repo.createTask(emptyTaskInput({ title: 'do celular' }));
+    expect(b.local()).toHaveLength(0);
+    await b.repo.refresh();
+    expect(b.local().map((t) => t.title)).toEqual(['do celular']);
+  });
+
+  it('atualização não apaga uma gravação local em andamento', async () => {
+    const { repo, remote, local } = setup();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const original = remote.saveTask.bind(remote);
+    vi.spyOn(remote, 'saveTask').mockImplementationOnce(async (task) => {
+      await gate;
+      return original(task);
+    });
+    const creating = repo.createTask(emptyTaskInput({ title: 'lenta' }));
+    const refreshing = repo.refresh();
+    expect(local().map((t) => t.title)).toEqual(['lenta']);
+    release();
+    await creating;
+    await refreshing;
+    expect(local().map((t) => t.title)).toEqual(['lenta']);
+  });
+});
+
+describe('importar dados salvos só no navegador', () => {
+  it('acrescenta sem sobrescrever e não traz o foco antigo', async () => {
+    const src = setup();
+    const list = await src.repo.createList({ name: 'Antiga', color: 'pink' });
+    const t1 = await src.repo.createTask(emptyTaskInput({ title: 'antiga 1', listId: list.id }));
+    await src.repo.createTask(emptyTaskInput({ title: 'antiga 2' }));
+    await src.repo.focusTask(t1.id);
+    const local = { lists: src.store.getState().lists, tasks: src.local() };
+
+    const dst = setup();
+    await dst.repo.createTask(emptyTaskInput({ title: 'já na conta' }));
+    const result = await dst.repo.importLocal(local);
+    expect(result).toEqual({ tasks: 2, lists: 1 });
+    const titles = dst.local().map((t) => t.title).sort();
+    expect(titles).toEqual(['antiga 1', 'antiga 2', 'já na conta']);
+    expect(dst.local().every((t) => t.focusDate === null)).toBe(true);
+    expect(dst.local().find((t) => t.title === 'antiga 1')?.listId).toBe(list.id);
+    await dst.repo.importLocal(local);
+    expect(dst.local()).toHaveLength(3);
+  });
+});
+
 describe('backup: exportar e restaurar', () => {
   async function seed(repo: ReturnType<typeof setup>['repo']) {
     const list = await repo.createList({ name: 'Trabalho', color: 'violet' });
@@ -301,16 +377,17 @@ describe('backup: exportar e restaurar', () => {
     return { list, t1, t2, t3 };
   }
 
-  it('exporta tudo e restaura em outra base preservando os registros', async () => {
+  const byId = <T extends { id: string }>(items: T[]) => [...items].sort((a, b) => a.id.localeCompare(b.id));
+
+  it('exporta tudo e restaura em outra conta preservando os registros', async () => {
     const src = setup();
     await seed(src.repo);
     const backup = await src.repo.exportBackup();
     expect(backup.app).toBe('clareia');
     expect(backup.schemaVersion).toBe(1);
     expect(backup.tasks).toHaveLength(3);
-    const text = JSON.stringify(backup);
 
-    const parsed = parseBackupText(text, TODAY);
+    const parsed = parseBackupText(JSON.stringify(backup), TODAY);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.summary).toMatchObject({ lists: 1, pending: 1, completed: 1, trashed: 1 });
@@ -319,24 +396,24 @@ describe('backup: exportar e restaurar', () => {
     await dst.repo.createTask(emptyTaskInput({ title: 'vai ser substituída' }));
     await dst.repo.restoreBackup(parsed.backup);
     const restored = await dst.repo.exportBackup();
-    expect(restored.tasks.sort((a, b) => a.id.localeCompare(b.id))).toEqual(
-      backup.tasks.sort((a, b) => a.id.localeCompare(b.id)),
-    );
+    expect(byId(restored.tasks)).toEqual(byId(backup.tasks));
     expect(restored.lists).toEqual(backup.lists);
+    expect(byId(await dst.server())).toEqual(byId(backup.tasks));
   });
 
-  it('registra a última exportação gerada', async () => {
-    const { repo } = setup();
+  it('registra a última exportação gerada na conta', async () => {
+    const { repo, remote } = setup();
     expect((await repo.getSettings()).lastExportGeneratedAt).toBeUndefined();
     await repo.markExported('2026-11-24T13:00:00.000Z');
     expect((await repo.getSettings()).lastExportGeneratedAt).toBe('2026-11-24T13:00:00.000Z');
+    expect((await remote.fetchAll()).settings.lastExportGeneratedAt).toBe('2026-11-24T13:00:00.000Z');
   });
 
-  it('arquivo inválido não altera a base', async () => {
-    const { repo, db } = setup();
+  it('arquivo inválido não altera a conta', async () => {
+    const { repo, remote } = setup();
     const { t1 } = await seed(repo);
     const valid = await repo.exportBackup();
-    const before = JSON.stringify([await db.tasks.orderBy('id').toArray(), await db.lists.toArray()]);
+    const before = JSON.stringify(await remote.fetchAll());
 
     const cases: Record<string, (b: BackupFile) => unknown> = {
       appErrado: (b) => ({ ...b, app: 'outro' }),
@@ -374,11 +451,10 @@ describe('backup: exportar e restaurar', () => {
     }
     expect(parseBackupText('{não é json', TODAY).ok).toBe(false);
     expect(parseBackupText('[]', TODAY).ok).toBe(false);
-    const after = JSON.stringify([await db.tasks.orderBy('id').toArray(), await db.lists.toArray()]);
-    expect(after).toBe(before);
+    expect(JSON.stringify(await remote.fetchAll())).toBe(before);
   });
 
-  it('falha no meio da transação não deixa restauração parcial', async () => {
+  it('falha no servidor durante a restauração mantém os dados anteriores', async () => {
     const src = setup();
     await seed(src.repo);
     const backup = await src.repo.exportBackup();
@@ -386,26 +462,26 @@ describe('backup: exportar e restaurar', () => {
     const dst = setup();
     const keep = await dst.repo.createTask(emptyTaskInput({ title: 'original' }));
     const keepList = await dst.repo.createList({ name: 'Minha', color: 'gray' });
-    vi.spyOn(dst.db.tasks, 'bulkAdd').mockRejectedValue(new Error('falha simulada'));
+    vi.spyOn(dst.remote, 'importData').mockRejectedValue(new Error('falha simulada'));
     await expect(dst.repo.restoreBackup(backup)).rejects.toBeInstanceOf(AppError);
     vi.restoreAllMocks();
 
-    const tasks = await dst.db.tasks.toArray();
-    expect(tasks.map((t) => t.id)).toEqual([keep.id]);
-    expect((await dst.db.lists.toArray()).map((l) => l.id)).toEqual([keepList.id]);
+    expect(dst.local().map((t) => t.id)).toEqual([keep.id]);
+    expect((await dst.server()).map((t) => t.id)).toEqual([keep.id]);
+    expect(dst.store.getState().lists.map((l) => l.id)).toEqual([keepList.id]);
   });
 
   it('restauração com backup inválido passado diretamente ao repositório é recusada', async () => {
-    const { repo, db } = setup();
+    const { repo, server } = setup();
     await repo.createTask(emptyTaskInput({ title: 'a' }));
     const bad = { app: 'clareia', schemaVersion: 1, exportedAt: 'x', lists: [], tasks: [], settings: {} } as unknown as BackupFile;
     await expectCode(repo.restoreBackup(bad), 'validation');
-    expect(await db.tasks.count()).toBe(1);
+    expect(await server()).toHaveLength(1);
   });
 });
 
 describe('fluxo integrado (persistência)', () => {
-  it('criar lista e tarefa, etapas, planejar, focar, editar, concluir, recarregar, histórico, reabrir, excluir, restaurar e exportar/restaurar', async () => {
+  it('criar lista e tarefa, etapas, planejar, focar, editar, concluir, abrir em outro aparelho, histórico, reabrir, excluir, restaurar e exportar/restaurar', async () => {
     const first = setup();
     const { repo } = first;
     const list = await repo.createList({ name: 'Estudos', color: 'amber' });
@@ -426,29 +502,29 @@ describe('fluxo integrado (persistência)', () => {
     expect(edited.unfocused).toBe(false);
     await repo.completeTask(task.id);
 
-    // "Recarregar": nova conexão ao mesmo banco.
-    first.db.close();
-    const reopened = setup(first.name, first.clockRef);
-    const history = (await reopened.db.tasks.toArray()).filter((t) => t.status === 'completed' && t.completedOn === TODAY);
+    // Outro aparelho entra na mesma conta.
+    const other = setup(first.kv, first.clockRef);
+    await other.repo.load();
+    const history = other.local().filter((t) => t.status === 'completed' && t.completedOn === TODAY);
     expect(history.map((t) => t.title)).toEqual(['Ler capítulo 2']);
     expect(history[0]?.subtasks).toHaveLength(2);
 
-    const reopenedTask = await reopened.repo.reopenTask(task.id);
+    const reopenedTask = await other.repo.reopenTask(task.id);
     expect(reopenedTask.completedOn).toBeNull();
-    await reopened.repo.trashTask(task.id);
-    const restored = await reopened.repo.restoreTask(task.id);
+    await other.repo.trashTask(task.id);
+    const restored = await other.repo.restoreTask(task.id);
     expect(restored.focusDate).toBeNull();
     expect(restored.priority).toBe('high');
 
-    const backup = await reopened.repo.exportBackup();
+    const backup = await other.repo.exportBackup();
     const parsed = parseBackupText(JSON.stringify(backup), TODAY);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    const other = setup();
-    await other.repo.restoreBackup(parsed.backup);
-    const final = await other.db.tasks.get(task.id);
+    const fresh = setup();
+    await fresh.repo.restoreBackup(parsed.backup);
+    const final = fresh.local().find((t) => t.id === task.id);
     expect(final?.title).toBe('Ler capítulo 2');
     expect(final?.subtasks.map((s) => s.title)).toEqual(['Introdução', 'Exercícios']);
-    expect(await other.db.lists.count()).toBe(1);
+    expect(fresh.store.getState().lists).toHaveLength(1);
   });
 });

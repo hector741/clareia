@@ -1,6 +1,5 @@
-import { useLiveQuery } from 'dexie-react-hooks';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { db } from '../db';
+import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { repo, store, toAppError } from '../db';
 import type { Task, TaskList } from '../domain/types';
 import { Button } from '../components/ui/Button';
 import styles from './DataContext.module.css';
@@ -19,82 +18,98 @@ export function useData(): DataValue {
   return value;
 }
 
-/**
- * Lê as tabelas por consultas reativas do Dexie. O IndexedDB continua sendo a única
- * fonte de verdade: aqui só existe um resultado derivado, atualizado a cada gravação.
- */
-export function DataProvider({ children }: { children: ReactNode }) {
-  const snapshot = useLiveQuery(async () => ({
-    tasks: await db.tasks.toArray(),
-    lists: await db.lists.orderBy('position').toArray(),
-  }));
+const REFRESH_MS = 60_000;
 
-  const value = useMemo<DataValue | null>(() => {
-    if (!snapshot) return null;
-    return {
-      tasks: snapshot.tasks,
-      lists: snapshot.lists,
-      listsById: new Map(snapshot.lists.map((l) => [l.id, l])),
+/** Mantém a cópia local em dia com o servidor (outros aparelhos), sem atrapalhar gravações. */
+function useBackgroundRefresh(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') repo.refresh().catch(() => undefined);
     };
-  }, [snapshot]);
-
-  if (!value) {
-    return (
-      <div className={styles.centered} role="status">
-        <p>Carregando suas tarefas…</p>
-      </div>
-    );
-  }
-  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+    const timer = window.setInterval(refresh, REFRESH_MS);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [enabled]);
 }
 
-type GateState = { status: 'opening' } | { status: 'ready' } | { status: 'error'; message: string };
+type LoadState = { status: 'loading' } | { status: 'ready' } | { status: 'error'; message: string };
 
-/** Abre o banco antes de renderizar; em falha, explica e oferece nova tentativa sem apagar nada. */
-export function DatabaseGate({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<GateState>({ status: 'opening' });
+/**
+ * Carrega os dados da conta ao entrar e os entrega às telas. Deve ser montado
+ * uma vez por usuário (use `key={user.id}`); ao desmontar, a cópia local é limpa.
+ */
+export function DataProvider({ children }: { children: ReactNode }) {
+  const [load, setLoad] = useState<LoadState>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const state = useSyncExternalStore(store.subscribe, store.getState);
 
   useEffect(() => {
     let cancelled = false;
-    setState({ status: 'opening' });
-    db.open()
+    repo
+      .load()
       .then(() => {
-        if (!cancelled) setState({ status: 'ready' });
+        if (!cancelled) setLoad({ status: 'ready' });
       })
       .catch((error: unknown) => {
-        if (cancelled) return;
-        const detail = error instanceof Error ? error.message : String(error);
-        setState({ status: 'error', message: detail });
+        if (!cancelled) setLoad({ status: 'error', message: toAppError(error).message });
       });
     return () => {
       cancelled = true;
     };
   }, [attempt]);
 
-  if (state.status === 'opening') {
+  useEffect(() => () => store.reset(), []);
+
+  useBackgroundRefresh(load.status === 'ready');
+
+  const value = useMemo<DataValue>(
+    () => ({
+      tasks: state.tasks,
+      lists: state.lists,
+      listsById: new Map(state.lists.map((l) => [l.id, l])),
+    }),
+    [state.tasks, state.lists],
+  );
+
+  if (load.status === 'loading') {
     return (
       <div className={styles.centered} role="status">
-        <p>Abrindo o armazenamento local…</p>
+        <p>Carregando suas tarefas…</p>
       </div>
     );
   }
-  if (state.status === 'error') {
+  if (load.status === 'error') {
     return (
       <div className={styles.centered}>
         <div className={styles.errorBox} role="alert">
-          <h1>Não foi possível abrir o armazenamento deste navegador</h1>
-          <p>
-            O Clareia guarda suas tarefas no IndexedDB. Isso pode falhar em janelas privativas, com o armazenamento
-            bloqueado ou com o disco cheio. Nenhum dado foi apagado.
-          </p>
-          <p className={styles.detail}>Detalhe técnico: {state.message}</p>
-          <Button variant="primary" onClick={() => setAttempt((n) => n + 1)}>
+          <h1>Não foi possível carregar suas tarefas</h1>
+          <p>Verifique sua conexão com a internet. Nenhum dado foi apagado.</p>
+          <p className={styles.detail}>{load.message}</p>
+          <Button
+            variant="primary"
+            onClick={() => {
+              setLoad({ status: 'loading' });
+              setAttempt((n) => n + 1);
+            }}
+          >
             Tentar novamente
           </Button>
         </div>
       </div>
     );
   }
-  return <>{children}</>;
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+}
+
+/** Usado em Configurações para mostrar a data da última exportação. */
+export function useSettings() {
+  return useSyncExternalStore(store.subscribe, store.getState).settings;
 }

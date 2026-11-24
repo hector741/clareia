@@ -1,13 +1,12 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Download, FileUp } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
-import { useData } from '../../app/DataContext';
+import { useData, useSettings } from '../../app/DataContext';
 import { useFeedback } from '../../app/feedback';
 import { restoreFocus } from '../../app/focus';
 import { Button } from '../../components/ui/Button';
 import dialogStyles from '../../components/ui/Dialog.module.css';
-import { db, repo, toAppError } from '../../db';
+import { repo, toAppError } from '../../db';
 import { parseBackupText, type BackupSummary } from '../../domain/backup';
 import { formatInstant, todayLocal } from '../../domain/dates';
 import { MAX_BACKUP_BYTES, type BackupFile } from '../../domain/types';
@@ -42,7 +41,7 @@ function Counts({ summary }: { summary: Pick<BackupSummary, 'lists' | 'pending' 
 export function BackupPanel() {
   const feedback = useFeedback();
   const { tasks, lists } = useData();
-  const settings = useLiveQuery(() => db.settings.get('app'));
+  const settings = useSettings();
   const fileInput = useRef<HTMLInputElement>(null);
   const chooseButton = useRef<HTMLButtonElement>(null);
   const [exporting, setExporting] = useState(false);
@@ -109,7 +108,7 @@ export function BackupPanel() {
     setRestoreError(null);
     try {
       await repo.restoreBackup(pending.backup);
-      feedback.success('Dados restaurados. Os dados anteriores deste navegador foram substituídos.');
+      feedback.success('Dados restaurados. Os dados anteriores da conta foram substituídos.');
       setPending(null);
     } catch (error) {
       setRestoreError(`${toAppError(error).message} Seus dados anteriores continuam intactos.`);
@@ -125,7 +124,7 @@ export function BackupPanel() {
         <h2 id="export-title">Exportar dados</h2>
         <p>
           Gera um arquivo JSON com listas, tarefas pendentes, concluídas, Lixeira e etapas. Guarde-o onde preferir ou
-          use-o para levar seus dados a outro navegador.
+          use-o para restaurar a conta depois.
         </p>
         <div>
           <Button variant="primary" icon={<Download size={18} />} onClick={() => void doExport()} disabled={exporting} aria-busy={exporting}>
@@ -143,8 +142,8 @@ export function BackupPanel() {
         <h2 id="restore-title">Restaurar de um arquivo</h2>
         <p>
           Escolha um arquivo exportado pelo Clareia. O arquivo é verificado por inteiro antes de qualquer alteração e você
-          confirma antes de substituir. Esta versão <strong>não mescla</strong> dados: ela substitui tudo o que está neste
-          navegador.
+          confirma antes de substituir. Esta versão <strong>não mescla</strong> dados: ela substitui tudo o que está na
+          sua conta.
         </p>
         <div>
           <input
@@ -193,7 +192,7 @@ export function BackupPanel() {
               restoreFocus(chooseButton.current);
             }}
           >
-            <AlertDialog.Title className={dialogStyles.alertTitle}>Substituir dados deste navegador?</AlertDialog.Title>
+            <AlertDialog.Title className={dialogStyles.alertTitle}>Substituir os dados da conta?</AlertDialog.Title>
             <AlertDialog.Description asChild>
               <div className={dialogStyles.alertDescription}>
                 <p>
@@ -201,7 +200,7 @@ export function BackupPanel() {
                   {pending ? formatInstant(pending.summary.exportedAt) : ''}) contém:
                 </p>
                 {pending ? <Counts summary={pending.summary} /> : null}
-                <p>Hoje este navegador tem:</p>
+                <p>Hoje a sua conta tem:</p>
                 <Counts summary={current} />
                 <p>
                   Ao confirmar, <strong>tudo isso será substituído</strong> pelo conteúdo do arquivo. Não há mesclagem e a
@@ -227,7 +226,7 @@ export function BackupPanel() {
                 </Button>
               </AlertDialog.Cancel>
               <Button variant="dangerSolid" onClick={() => void confirmRestore()} disabled={restoring} aria-busy={restoring}>
-                {restoring ? 'Substituindo…' : restoreError ? 'Tentar de novo' : 'Substituir dados deste navegador'}
+                {restoring ? 'Substituindo…' : restoreError ? 'Tentar de novo' : 'Substituir dados da conta'}
               </Button>
             </div>
           </AlertDialog.Content>

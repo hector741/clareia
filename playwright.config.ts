@@ -20,7 +20,8 @@ export default defineConfig({
   webServer: {
     command: `npm run dev -- --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
-    reuseExistingServer: true,
+    reuseExistingServer: false,
+    env: { VITE_BACKEND: 'memory' },
     timeout: 60_000,
   },
 });

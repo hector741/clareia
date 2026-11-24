@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { readFileSync } from 'node:fs';
 
 const quickAdd = (page: Page) => page.getByRole('textbox', { name: 'Nova tarefa' });
@@ -133,7 +134,7 @@ test.describe('Clareia - fluxo principal', () => {
 
     // Exportar.
     await page.getByRole('link', { name: 'Configurações' }).click();
-    await expect(page.getByText('Suas tarefas ficam neste navegador. Exporte uma cópia para guardar ou transferir seus dados.')).toBeVisible();
+    await expect(page.getByText('Conectado como')).toContainText('teste@clareia.app');
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('button', { name: 'Exportar dados' }).click(),
@@ -152,9 +153,9 @@ test.describe('Clareia - fluxo principal', () => {
     await addQuick(page, 'Tarefa extra');
     await page.getByRole('link', { name: 'Configurações' }).click();
     await page.locator('input[type=file]').setInputFiles(backupPath);
-    const restoreDialog = page.getByRole('alertdialog', { name: 'Substituir dados deste navegador?' });
+    const restoreDialog = page.getByRole('alertdialog', { name: 'Substituir os dados da conta?' });
     await expect(restoreDialog).toContainText('2');
-    await restoreDialog.getByRole('button', { name: 'Substituir dados deste navegador' }).click();
+    await restoreDialog.getByRole('button', { name: 'Substituir dados da conta' }).click();
     await expect(restoreDialog).toBeHidden();
     await page.getByRole('link', { name: 'Todas' }).click();
     await expect(page.getByRole('button', { name: 'Abrir tarefa: Tarefa extra' })).toHaveCount(0);
@@ -330,27 +331,18 @@ test.describe('Robustez', () => {
   test('falha de gravação preserva o texto e permite tentar de novo', async ({ page }) => {
     await page.goto('/#/hoje');
     await addQuick(page, 'Existente');
-    await page.evaluate(() => {
-      const w = window as unknown as { __orig?: { add: unknown; put: unknown } };
-      const proto = IDBObjectStore.prototype;
-      w.__orig = { add: proto.add, put: proto.put };
-      const fail = () => {
-        throw new DOMException('Cheio', 'QuotaExceededError');
-      };
-      proto.add = fail as typeof proto.add;
-      proto.put = fail as typeof proto.put;
-    });
+    const setOffline = (value: boolean) =>
+      page.evaluate((v) => {
+        (window as unknown as { __clareiaMemory: { failWrites: boolean } }).__clareiaMemory.failWrites = v;
+      }, value);
+    await setOffline(true);
     await quickAdd(page).fill('Não vai gravar');
     await quickAdd(page).press('Enter');
-    await expect(page.getByRole('alert').filter({ hasText: 'armazenamento do navegador está cheio' })).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: 'Sem conexão com o servidor' })).toBeVisible();
     await expect(quickAdd(page)).toHaveValue('Não vai gravar');
     await expect(page.getByRole('button', { name: 'Abrir tarefa: Não vai gravar' })).toHaveCount(0);
     await expect(page.getByText('Tarefa adicionada a Hoje.')).toHaveCount(0);
-    await page.evaluate(() => {
-      const w = window as unknown as { __orig: { add: typeof IDBObjectStore.prototype.add; put: typeof IDBObjectStore.prototype.put } };
-      IDBObjectStore.prototype.add = w.__orig.add;
-      IDBObjectStore.prototype.put = w.__orig.put;
-    });
+    await setOffline(false);
     await page.getByRole('button', { name: 'Adicionar', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Abrir tarefa: Não vai gravar' })).toBeVisible();
     await expect(quickAdd(page)).toHaveValue('');

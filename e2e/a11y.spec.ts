@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { addDays, todayLocal } from '../src/domain/dates';
 
 const today = todayLocal(new Date(), 'America/Sao_Paulo');
@@ -33,7 +34,7 @@ const backup = {
 async function seed(page: Page) {
   await page.goto('/#/configuracoes');
   await page.locator('input[type=file]').setInputFiles({ name: 'b.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
-  await page.getByRole('button', { name: 'Substituir dados deste navegador' }).click();
+  await page.getByRole('button', { name: 'Substituir dados da conta' }).click();
   await page.getByRole('alertdialog').waitFor({ state: 'hidden' });
   await page.getByText('Dados restaurados.').waitFor();
   await page.getByRole('button', { name: 'Dispensar mensagem' }).click();

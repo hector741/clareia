@@ -1,0 +1,9 @@
+{
+  "site_url": "https://clareia-sage.vercel.app",
+  "uri_allow_list": "https://clareia-sage.vercel.app/**,https://*-hectormanolo-5807s-projects.vercel.app/**,http://localhost:5173/**,http://localhost:5174/**",
+  "external_email_enabled": true,
+  "mailer_autoconfirm": false,
+  "password_min_length": 8,
+  "mailer_otp_exp": 3600,
+  "mailer_otp_length": 6
+}

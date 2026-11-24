@@ -1,7 +1,9 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './AppShell';
 import { ConfirmProvider } from './ConfirmContext';
-import { DataProvider, DatabaseGate } from './DataContext';
+import { backend } from '../backend';
+import { LegacyImportPrompt } from '../features/account/LegacyImport';
+import { AuthGate } from './AuthGate';
 import { EditorProvider } from './EditorContext';
 import { ErrorBoundary } from './ErrorBoundary';
 import { FeedbackProvider } from './feedback';
@@ -16,14 +18,15 @@ import { TrashPage } from './pages/TrashPage';
 import { UpcomingPage } from './pages/UpcomingPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { TodayProvider } from './TodayContext';
+import { useLayoutMode } from './useLayoutMode';
 
 export function App() {
+  useLayoutMode();
   return (
     <ErrorBoundary>
       <FeedbackProvider>
-        <DatabaseGate>
-          <DataProvider>
-            <TodayProvider>
+        <AuthGate backend={backend}>
+          <TodayProvider>
               <HashRouter>
                 <ConfirmProvider>
                   <EditorProvider>
@@ -46,8 +49,8 @@ export function App() {
                 </ConfirmProvider>
               </HashRouter>
             </TodayProvider>
-          </DataProvider>
-        </DatabaseGate>
+            <LegacyImportPrompt />
+        </AuthGate>
       </FeedbackProvider>
     </ErrorBoundary>
   );
