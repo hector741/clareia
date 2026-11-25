@@ -84,6 +84,22 @@ Na primeira vez que usar os testes de ponta a ponta, instale o navegador do Play
 
 Os dois campos são independentes. **Focar hoje** define Fazer em como hoje e **não** altera o Prazo. Uma tarefa com Fazer em no passado e Prazo no futuro aparece em **Replanejar** (e não como atrasada); só o Prazo anterior a hoje aparece como **Prazo passou**.
 
+## Compras
+
+A aba **Compras** (no menu lateral e, no celular, na quinta aba da navegação) guarda listas de compras de um jeito que não mistura previsão com dinheiro gasto.
+
+- **Listas:** nome, mercado (opcional), orçamento (opcional; zero é válido) e data prevista (opcional). Status: *rascunho*, *em compras* e *finalizada*. **Arquivar** tira a lista da tela principal sem apagar nada. Excluir só vale para listas que ainda não foram finalizadas; a lista finalizada fica como registro.
+- **Itens:** digite o nome e pressione Enter para adicionar com quantidade 1 e categoria “Outros”. **Com detalhes** abre o editor: embalagem (cadastro de produto e variante), categoria (dez categorias fixas), unidade de venda (un, kg ou L), quantidade e preço estimado. Gramas e mililitros são convertidos automaticamente para kg e L.
+- **Previsão × confirmação:** a estimativa é só previsão. O total gasto só entra quando você confirma o preço e a quantidade efetiva de um item no mercado (**Informar preço**). O estimado vem da última compra confirmada da mesma variante no mesmo mercado. Preço de outro mercado é mostrado como referência e só é usado se você escolher **Usar preço de outro mercado**.
+- **Modos:** **Planejar** organiza a lista por categoria. **Ir às compras** mostra pendentes antes do carrinho, marca itens no carrinho, permite **Dividir** uma linha (o restante volta como pendente) e **Desisti** (o item sai da previsão e fica em “Desistidos”).
+- **Dinheiro:** valores são guardados em centavos e quantidades em milésimos, sem ponto flutuante. O arredondamento do valor bruto é meio para cima.
+- **Finalizar:** **Revisar e finalizar** exige que todos os itens do carrinho tenham preço confirmado. Você confere mercado, data, desconto geral e despesas extras, e escolhe se os itens pendentes ficam de fora ou vão para uma nova lista. A finalização é uma única operação no banco: repetir o clique ou abrir a lista em outra aba não cria outra compra.
+- **Correções e anulações:** a compra finalizada fica somente leitura na lista. **Corrigir** cria uma nova revisão (exige motivo) e preserva a anterior como substituída. **Anular** exige motivo e mantém o registro, que sai dos totais.
+- **Histórico:** em **Compras → Histórico** você filtra por período e mercado, vê o total do período e pode mostrar compras anuladas. **Recomprar** cria uma lista a partir de uma compra anterior.
+- **Produtos e comparação:** em **Compras → Produtos** você cadastra mercados, produtos e embalagens. A tela de produto compara preços por embalagem ou por kg, L ou un, com gráfico e tabela. Só aparecem pontos de compras reais: sem compra, não há ponto nem variação, e uma compra sem anterior no mesmo mercado não mostra “0,00%”.
+- **Acessibilidade:** alvos de toque de 44 px, sem elementos interativos aninhados, movimento reduzido respeitado, funciona em 360, 768 e 1440 px.
+- **Limitações:** Compras precisa de internet (ainda não há modo offline). Não entra em contadores nem no foco de tarefas. A comparação usa os preços confirmados; não há leitura de código de barras nem de nota fiscal.
+
 ## Sincronização e conexão
 
 - Cada alteração aparece na hora e é gravada na conta em seguida, em ordem. Se a gravação falhar (sem internet, sessão expirada), a alteração é desfeita na tela e o app avisa; o texto digitado é preservado para tentar de novo.
@@ -95,7 +111,8 @@ Os dois campos são independentes. **Focar hoje** define Fazer em como hoje e **
 
 Em **Configurações**:
 
-- **Exportar dados** gera `clareia-backup-AAAA-MM-DD.json` com listas, tarefas (pendentes, concluídas e na Lixeira), etapas e sessões de foco. Backups antigos, sem sessões, continuam aceitos. O app registra “Última exportação gerada” na conta.
+- **Exportar dados** gera `clareia-backup-AAAA-MM-DD.json` com listas, tarefas (pendentes, concluídas e na Lixeira), etapas, sessões de foco e o bloco `shopping` (mercados, produtos, variantes, listas, itens e compras com todas as revisões). Backups antigos, sem sessões, continuam aceitos. O app registra “Última exportação gerada” na conta.
+- **Versões:** o formato atual é o 2. Um arquivo da versão 1 não tem o bloco de compras: ao restaurá-lo, as compras atuais são mantidas. Arquivos de uma versão mais nova que a do app são recusados sem alterar nada.
 - **Escolher arquivo de backup** valida o arquivo inteiro (até 10 MiB) antes de qualquer alteração. Se estiver válido, mostra as contagens e pede confirmação para **Substituir dados da conta**, com opção de exportar os dados atuais antes. A restauração acontece em uma única transação no banco; se algo falhar, os dados anteriores permanecem intactos. Não existe mesclagem.
 
 ## Banco de dados e login (Supabase)
@@ -144,6 +161,7 @@ src/features/account conta (alterar senha, sair) e envio das tarefas de antes do
 src/features/tasks   captura, linha, grupos, editor e checklist
 src/features/lists   gerenciamento de listas
 src/features/backup  exportação e restauração
+src/features/compras listas, itens, finalização, histórico, produtos e comparações (regras em src/domain/shopping)
 src/features/install instalação na tela inicial
 src/features/pomodoro temporizador: regras (model.ts), painel, avisos, som, notificações e configurações
 public/notify-sw.js  service worker mínimo, só para notificações no celular (sem cache)

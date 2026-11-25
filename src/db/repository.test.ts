@@ -384,7 +384,8 @@ describe('backup: exportar e restaurar', () => {
     await seed(src.repo);
     const backup = await src.repo.exportBackup();
     expect(backup.app).toBe('clareia');
-    expect(backup.schemaVersion).toBe(1);
+    expect(backup.schemaVersion).toBe(2);
+    expect(backup.shopping).toEqual({ stores: [], products: [], variants: [], lists: [], items: [], purchases: [] });
     expect(backup.tasks).toHaveLength(3);
 
     const parsed = parseBackupText(JSON.stringify(backup), TODAY);
@@ -417,7 +418,7 @@ describe('backup: exportar e restaurar', () => {
 
     const cases: Record<string, (b: BackupFile) => unknown> = {
       appErrado: (b) => ({ ...b, app: 'outro' }),
-      versaoFutura: (b) => ({ ...b, schemaVersion: 2 }),
+      versaoFutura: (b) => ({ ...b, schemaVersion: 3 }),
       campoExtra: (b) => ({ ...b, extra: true }),
       dataImpossivel: (b) => ({ ...b, tasks: b.tasks.map((t) => ({ ...t, dueDate: '2026-02-30' })) }),
       idDuplicado: (b) => ({ ...b, tasks: [...b.tasks, b.tasks[0]] }),
@@ -462,7 +463,7 @@ describe('backup: exportar e restaurar', () => {
     const dst = setup();
     const keep = await dst.repo.createTask(emptyTaskInput({ title: 'original' }));
     const keepList = await dst.repo.createList({ name: 'Minha', color: 'gray' });
-    vi.spyOn(dst.remote, 'importData').mockRejectedValue(new Error('falha simulada'));
+    vi.spyOn(dst.remote, 'restoreBackup').mockRejectedValue(new Error('falha simulada'));
     await expect(dst.repo.restoreBackup(backup)).rejects.toBeInstanceOf(AppError);
     vi.restoreAllMocks();
 

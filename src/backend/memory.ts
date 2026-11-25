@@ -1,5 +1,7 @@
 import { SCHEMA_VERSION, MAX_FOCUS, type FocusSession, type Settings, type Task, type TaskList } from '../domain/types';
+import { EMPTY_SHOPPING, type ShoppingData } from '../domain/shopping/types';
 import { authFailure } from './authErrors';
+import { assertShoppingIntegrity, createMemoryShopping } from './memoryShopping';
 import type { AuthApi, AuthEvent, AuthUser, Backend, Remote, Snapshot } from './types';
 import { readUrlIntent } from './urlIntent';
 
@@ -33,6 +35,7 @@ interface Data {
   lists: TaskList[];
   focusSessions: FocusSession[];
   settings: Settings;
+  shopping: ShoppingData;
 }
 
 const emptyData = (): Data => ({
@@ -40,6 +43,7 @@ const emptyData = (): Data => ({
   lists: [],
   focusSessions: [],
   settings: { id: 'app', schemaVersion: SCHEMA_VERSION },
+  shopping: structuredClone(EMPTY_SHOPPING),
 });
 
 function dbError(message: string, code: string): Error {
@@ -50,7 +54,9 @@ export function createMemoryRemote(kv: KeyValue, userId: () => string, controls:
   const key = () => `clareia-memory:data:${userId()}`;
   const load = (): Data => {
     const raw = kv.get(key());
-    return raw ? { ...emptyData(), ...(JSON.parse(raw) as Partial<Data>) } : emptyData();
+    if (!raw) return emptyData();
+    const saved = JSON.parse(raw) as Partial<Data>;
+    return { ...emptyData(), ...saved, shopping: { ...structuredClone(EMPTY_SHOPPING), ...(saved.shopping ?? {}) } };
   };
   const sessionTaskExists = (data: Data, session: FocusSession) => {
     if (!data.tasks.some((t) => t.id === session.taskId)) {
@@ -82,7 +88,10 @@ export function createMemoryRemote(kv: KeyValue, userId: () => string, controls:
     }
   };
 
+  const shoppingOps = createMemoryShopping(write);
+
   return {
+    ...shoppingOps,
     async fetchAll(): Promise<Snapshot> {
       await Promise.resolve();
       const data = load();
@@ -156,6 +165,19 @@ export function createMemoryRemote(kv: KeyValue, userId: () => string, controls:
     saveSettings: (settings) =>
       write((data) => {
         data.settings = settings;
+      }),
+    restoreBackup: ({ lists, tasks, focusSessions, shopping }) =>
+      write((data) => {
+        for (const task of tasks) {
+          if (task.listId !== null && !lists.some((l) => l.id === task.listId)) {
+            throw dbError('insert or update on table "tasks" violates foreign key constraint', '23503');
+          }
+        }
+        if (shopping) assertShoppingIntegrity(shopping);
+        data.tasks = structuredClone(tasks);
+        data.lists = structuredClone(lists);
+        data.focusSessions = structuredClone(focusSessions);
+        if (shopping) data.shopping = structuredClone(shopping);
       }),
   };
 }

@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { CalendarDays, Inbox, Menu, MoreHorizontal, Plus, Search, Sun, X } from 'lucide-react';
+import { CalendarDays, Inbox, Menu, MoreHorizontal, Plus, Search, ShoppingCart, Sun, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, matchPath, useLocation } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
@@ -139,8 +139,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 function MobileNav() {
   const { pathname } = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
-  const primary = [routes.today, routes.inbox, routes.upcoming] as const;
-  const moreActive = !primary.some((p) => pathname === p);
+  const primary = [routes.today, routes.inbox, routes.upcoming, routes.shopping] as const;
+  // "Mais" fica ativo fora das abas principais; subrotas de Compras contam como a aba Compras.
+  const moreActive = !primary.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
   const item = (to: string, label: string, icon: ReactNode) => (
     <NavLink
@@ -157,6 +158,7 @@ function MobileNav() {
       {item(routes.today, 'Hoje', <Sun size={22} />)}
       {item(routes.inbox, 'Entrada', <Inbox size={22} />)}
       {item(routes.upcoming, 'Próximas', <CalendarDays size={22} />)}
+      {item(routes.shopping, 'Compras', <ShoppingCart size={22} />)}
       <Dialog.Root open={moreOpen} onOpenChange={setMoreOpen}>
         <Dialog.Trigger asChild>
           <button type="button" className={`${styles.tab} ${moreActive ? styles.tabActive : ''}`}>

@@ -3,6 +3,8 @@ export type DateString = string;
 /** Instante em ISO 8601. */
 export type IsoInstant = string;
 
+import type { ShoppingData } from './shopping/types';
+
 export const PRIORITIES = ['normal', 'important', 'high'] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
@@ -68,14 +70,22 @@ export interface Settings {
 
 export interface BackupFile {
   app: 'clareia';
-  schemaVersion: 1;
+  /** 1: tarefas e Pomodoro. 2: acrescenta o bloco `shopping` (módulo Compras). */
+  schemaVersion: 1 | 2;
   exportedAt: IsoInstant;
   lists: TaskList[];
   tasks: Task[];
   /** Ausente em backups anteriores ao Pomodoro. */
   focusSessions?: FocusSession[];
+  /** Presente a partir da versão 2 do formato. Ausente em backups antigos (não apaga compras atuais). */
+  shopping?: ShoppingData;
   settings: Settings;
 }
+
+/** Versão do formato de backup escrita por esta versão do app. */
+export const BACKUP_VERSION = 2;
+/** Versões do formato de backup que esta versão do app aceita. */
+export const SUPPORTED_BACKUP_VERSIONS: readonly number[] = [1, 2];
 
 export const SCHEMA_VERSION = 1;
 export const MAX_FOCUS = 3;

@@ -14,6 +14,7 @@ import {
 } from './mapping';
 import type { AuthApi, AuthEvent, AuthUser, Backend, Remote, Snapshot } from './types';
 import { readUrlIntent } from './urlIntent';
+import { createShoppingRemote } from './shoppingRemote';
 
 const PAGE = 1000;
 
@@ -27,7 +28,19 @@ export function createSupabaseRemote(client: SupabaseClient): Remote {
     if (error) throw error;
   };
 
-  async function fetchRows<T>(table: 'tasks' | 'lists' | 'focus_sessions'): Promise<T[]> {
+  async function fetchRows<T>(
+    table:
+      | 'tasks'
+      | 'lists'
+      | 'focus_sessions'
+      | 'shopping_stores'
+      | 'shopping_products'
+      | 'shopping_variants'
+      | 'shopping_lists'
+      | 'shopping_items'
+      | 'shopping_purchases'
+      | 'shopping_purchase_lines',
+  ): Promise<T[]> {
     const rows: T[] = [];
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await client
@@ -41,13 +54,16 @@ export function createSupabaseRemote(client: SupabaseClient): Remote {
     }
   }
 
+  const shoppingRemote = createShoppingRemote(client, fetchRows, check);
+
   return {
     async fetchAll(): Promise<Snapshot> {
-      const [taskRows, listRows, sessionRows, settingsResult] = await Promise.all([
+      const [taskRows, listRows, sessionRows, settingsResult, shopping] = await Promise.all([
         fetchRows<TaskRow>('tasks'),
         fetchRows<ListRow>('lists'),
         fetchRows<FocusSessionRow>('focus_sessions'),
         client.from('user_settings').select('last_export_generated_at').maybeSingle(),
+        shoppingRemote.fetchShopping(),
       ]);
       check(settingsResult.error);
       const exported = (settingsResult.data as { last_export_generated_at: string | null } | null)
@@ -61,8 +77,10 @@ export function createSupabaseRemote(client: SupabaseClient): Remote {
           schemaVersion: SCHEMA_VERSION,
           ...(exported ? { lastExportGeneratedAt: new Date(exported).toISOString() } : {}),
         },
+        shopping,
       };
     },
+    ...shoppingRemote.methods,
     async saveTask(task) {
       const { error } = await client.from('tasks').upsert(taskToRow(task), { onConflict: 'user_id,id' });
       check(error);

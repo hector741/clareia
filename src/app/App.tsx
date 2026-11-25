@@ -8,6 +8,11 @@ import { AuthGate } from './AuthGate';
 import { EditorProvider } from './EditorContext';
 import { ErrorBoundary } from './ErrorBoundary';
 import { FeedbackProvider } from './feedback';
+import { ComprasPage } from '../features/compras/ComprasPage';
+import { HistoryPage } from '../features/compras/HistoryPage';
+import { ListPage as ShoppingListPage } from '../features/compras/ListPage';
+import { ProductPage } from '../features/compras/ProductPage';
+import { ProductsPage } from '../features/compras/ProductsPage';
 import { AllPage } from './pages/AllPage';
 import { CompletedPage } from './pages/CompletedPage';
 import { InboxPage } from './pages/InboxPage';
@@ -43,6 +48,11 @@ export function App() {
                         <Route path="/busca" element={<SearchPage />} />
                         <Route path="/concluidas" element={<CompletedPage />} />
                         <Route path="/lixeira" element={<TrashPage />} />
+                        <Route path="/compras" element={<ComprasPage />} />
+                        <Route path="/compras/listas/:id" element={<ShoppingListPage />} />
+                        <Route path="/compras/historico" element={<HistoryPage />} />
+                        <Route path="/compras/produtos" element={<ProductsPage />} />
+                        <Route path="/compras/produtos/:id" element={<ProductPage />} />
                         <Route path="/configuracoes" element={<SettingsPage />} />
                         <Route path="*" element={<NotFoundPage />} />
                       </Routes>

@@ -11,6 +11,7 @@ import {
 import { compareManual } from '../domain/sort';
 import { isPendingActive } from '../domain/today';
 import {
+  BACKUP_VERSION,
   FOCUS_LIMIT_MESSAGE,
   MAX_FOCUS,
   SCHEMA_VERSION,
@@ -22,6 +23,7 @@ import {
   type TaskList,
 } from '../domain/types';
 import { AppError, parseOrThrow, toAppError } from './errors';
+import { createShoppingOps } from './shopping';
 import type { DataStore } from './store';
 
 export type MoveDirection = 'up' | 'down';
@@ -133,7 +135,17 @@ export function createRepository(store: DataStore, remote: Remote, clock: () => 
     }
   }
 
+  const shopping = createShoppingOps({
+    store,
+    remote,
+    enqueue,
+    refresh,
+    clock,
+    newId: () => crypto.randomUUID(),
+  });
+
   return {
+    ...shopping,
     /** Carrega a conta inteira (ao entrar). */
     async load(): Promise<void> {
       await wrap(async () => {
@@ -431,14 +443,15 @@ export function createRepository(store: DataStore, remote: Remote, clock: () => 
     async exportBackup(): Promise<BackupFile> {
       return wrap(async () => {
         await idle();
-        const { tasks, lists, focusSessions, settings } = store.getState();
+        const { tasks, lists, focusSessions, settings, shopping: shoppingData } = store.getState();
         return {
           app: 'clareia' as const,
-          schemaVersion: SCHEMA_VERSION,
+          schemaVersion: BACKUP_VERSION,
           exportedAt: stamp(),
           lists: [...lists].sort((a, b) => a.position - b.position),
           tasks: [...tasks],
           focusSessions: [...focusSessions].sort((a, b) => a.endedAt.localeCompare(b.endedAt)),
+          shopping: structuredClone(shoppingData),
           settings,
         };
       });
@@ -454,7 +467,15 @@ export function createRepository(store: DataStore, remote: Remote, clock: () => 
       const data = checked.backup;
       await wrap(async () => {
         await idle();
-        await enqueue(() => remote.importData(data.lists, data.tasks, true, data.focusSessions ?? []));
+        // Backup v1 não tem bloco de compras: `null` preserva as compras atuais.
+        await enqueue(() =>
+          remote.restoreBackup({
+            lists: data.lists,
+            tasks: data.tasks,
+            focusSessions: data.focusSessions ?? [],
+            shopping: data.shopping ?? null,
+          }),
+        );
         store.replace(await remote.fetchAll());
       });
     },

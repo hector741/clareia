@@ -1,10 +1,12 @@
 import { SCHEMA_VERSION, type FocusSession, type Settings, type Task, type TaskList } from '../domain/types';
+import { EMPTY_SHOPPING, type ShoppingData, type ShoppingItem, type ShoppingList, type ShoppingProduct, type ShoppingPurchase, type ShoppingStore, type ShoppingVariant } from '../domain/shopping/types';
 
 export interface StoreState {
   tasks: Task[];
   lists: TaskList[];
   focusSessions: FocusSession[];
   settings: Settings;
+  shopping: ShoppingData;
 }
 
 const initial = (): StoreState => ({
@@ -12,9 +14,15 @@ const initial = (): StoreState => ({
   lists: [],
   focusSessions: [],
   settings: { id: 'app', schemaVersion: SCHEMA_VERSION },
+  shopping: EMPTY_SHOPPING,
 });
 
 const byPosition = (a: TaskList, b: TaskList) => a.position - b.position;
+
+/** Chaves das coleções do módulo Compras. */
+export type ShoppingKey = keyof ShoppingData;
+
+type ShoppingRow = ShoppingStore | ShoppingProduct | ShoppingVariant | ShoppingList | ShoppingItem | ShoppingPurchase;
 
 /**
  * Cópia em memória dos dados da conta. As telas leem daqui (instantâneo) e o
@@ -101,5 +109,40 @@ export class DataStore {
 
   setSettings(settings: Settings): void {
     this.set({ ...this.state, settings });
+  }
+
+  /* ------------------------------ Compras ------------------------------ */
+
+  /** Substitui ou acrescenta linhas de uma coleção do módulo (por id). */
+  putShoppingRows<K extends ShoppingKey>(key: K, rows: ShoppingData[K]): void {
+    if (rows.length === 0) return;
+    const incoming = new Map((rows as ShoppingRow[]).map((r) => [r.id, r]));
+    const current = this.state.shopping[key] as ShoppingRow[];
+    const known = new Set(current.map((r) => r.id));
+    const kept = current.map((r) => incoming.get(r.id) ?? r);
+    const added = (rows as ShoppingRow[]).filter((r) => !known.has(r.id));
+    this.set({ ...this.state, shopping: { ...this.state.shopping, [key]: [...kept, ...added] } });
+  }
+
+  removeShoppingRow(key: ShoppingKey, id: string): void {
+    const current = this.state.shopping[key] as ShoppingRow[];
+    this.set({ ...this.state, shopping: { ...this.state.shopping, [key]: current.filter((r) => r.id !== id) } });
+  }
+
+  /** Remove uma lista e seus itens da cópia local (como o banco faz em cascata). */
+  removeShoppingList(id: string): void {
+    this.set({
+      ...this.state,
+      shopping: {
+        ...this.state.shopping,
+        lists: this.state.shopping.lists.filter((l) => l.id !== id),
+        items: this.state.shopping.items.filter((i) => i.listId !== id),
+      },
+    });
+  }
+
+  /** Substitui todo o módulo (após gravar, ou ao recarregar). */
+  setShopping(shopping: ShoppingData): void {
+    this.set({ ...this.state, shopping });
   }
 }

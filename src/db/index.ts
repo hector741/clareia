@@ -17,6 +17,18 @@ const offlineRemote: Remote = {
   importData: unavailable,
   saveFocusSession: unavailable,
   saveSettings: unavailable,
+  restoreBackup: unavailable,
+  saveShoppingStore: unavailable,
+  saveShoppingProduct: unavailable,
+  saveShoppingVariant: unavailable,
+  saveShoppingList: unavailable,
+  deleteShoppingList: unavailable,
+  saveShoppingItems: unavailable,
+  deleteShoppingItem: unavailable,
+  createShoppingList: unavailable,
+  finalizeShoppingList: unavailable,
+  correctShoppingPurchase: unavailable,
+  voidShoppingPurchase: unavailable,
 };
 
 export const store = new DataStore();

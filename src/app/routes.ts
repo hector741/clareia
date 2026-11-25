@@ -8,4 +8,9 @@ export const routes = {
   completed: '/concluidas',
   trash: '/lixeira',
   settings: '/configuracoes',
+  shopping: '/compras',
+  shoppingList: (id: string) => `/compras/listas/${id}`,
+  shoppingHistory: '/compras/historico',
+  shoppingProducts: '/compras/produtos',
+  shoppingProduct: (id: string) => `/compras/produtos/${id}`,
 } as const;

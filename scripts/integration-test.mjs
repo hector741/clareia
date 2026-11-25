@@ -1,5 +1,5 @@
 // Testa o app contra o projeto Supabase real: cria dois usuários temporários já
-// confirmados, roda src/backend/supabase.integration.test.ts e apaga os usuários.
+// confirmados, roda os testes *.integration.test.ts (tarefas e compras) e apaga os usuários.
 // Uso: node scripts/integration-test.mjs   (requer .env.supabase)
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -37,7 +37,8 @@ try {
     if (!res.ok) throw new Error(`criar usuário: HTTP ${res.status} ${await res.text()}`);
     created.push((await res.json()).id);
   }
-  const run = spawnSync('npx', ['vitest', 'run', 'src/backend/supabase.integration.test.ts'], {
+  // Serial: os dois arquivos usam as mesmas contas; em paralelo um restore apaga dados do outro.
+  const run = spawnSync('npx', ['vitest', 'run', '--no-file-parallelism', 'integration.test.ts'], {
     stdio: 'inherit',
     shell: true,
     env: { ...process.env, CLAREIA_IT_URL: url, CLAREIA_IT_KEY: publishable, CLAREIA_IT_USERS: JSON.stringify(users) },

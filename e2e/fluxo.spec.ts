@@ -143,7 +143,8 @@ test.describe('Clareia - fluxo principal', () => {
     const backupPath = await download.path();
     const backup = JSON.parse(readFileSync(backupPath, 'utf8'));
     expect(backup.app).toBe('clareia');
-    expect(backup.schemaVersion).toBe(1);
+    expect(backup.schemaVersion).toBe(2);
+    expect(backup.shopping).toEqual({ stores: [], products: [], variants: [], lists: [], items: [], purchases: [] });
     expect(backup.tasks).toHaveLength(2);
     expect(backup.lists).toHaveLength(1);
     await expect(page.getByText(/Última exportação gerada:/)).toBeVisible();

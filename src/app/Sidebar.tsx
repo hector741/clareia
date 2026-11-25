@@ -6,6 +6,7 @@ import {
   Plus,
   Search,
   Settings,
+  ShoppingCart,
   Sun,
   Trash2,
 } from 'lucide-react';
@@ -110,6 +111,9 @@ export function Sidebar({ onNavigate, label = 'Principal' }: SidebarProps) {
         </NavItem>
         <NavItem to={routes.all} icon={<ListTodo size={20} />} onNavigate={onNavigate}>
           Todas
+        </NavItem>
+        <NavItem to={routes.shopping} icon={<ShoppingCart size={20} />} onNavigate={onNavigate}>
+          Compras
         </NavItem>
       </ul>
 

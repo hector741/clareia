@@ -7,9 +7,10 @@ import { restoreFocus } from '../../app/focus';
 import { Button } from '../../components/ui/Button';
 import dialogStyles from '../../components/ui/Dialog.module.css';
 import { repo, toAppError } from '../../db';
-import { parseBackupText, type BackupSummary } from '../../domain/backup';
+import { parseBackupText, type BackupSummary, type ShoppingSummary } from '../../domain/backup';
 import { formatInstant, todayLocal } from '../../domain/dates';
 import { MAX_BACKUP_BYTES, type BackupFile } from '../../domain/types';
+import { useShopping } from '../compras/useShopping';
 import { generateBackupDownload } from './download';
 import styles from './BackupPanel.module.css';
 
@@ -17,6 +18,25 @@ interface PendingRestore {
   fileName: string;
   backup: BackupFile;
   summary: BackupSummary;
+}
+
+function ShoppingCounts({ counts }: { counts: ShoppingSummary | null }) {
+  if (!counts) {
+    return <p className={styles.note}>Este arquivo é da versão 1 e não traz compras: as compras atuais da conta serão mantidas.</p>;
+  }
+  return (
+    <ul className={styles.counts}>
+      <li>
+        <strong>{counts.lists}</strong> {counts.lists === 1 ? 'lista de compras' : 'listas de compras'}
+      </li>
+      <li>
+        <strong>{counts.purchases}</strong> {counts.purchases === 1 ? 'compra registrada' : 'compras registradas'}
+      </li>
+      <li>
+        <strong>{counts.voided}</strong> {counts.voided === 1 ? 'compra anulada' : 'compras anuladas'}
+      </li>
+    </ul>
+  );
 }
 
 function Counts({ summary }: { summary: Pick<BackupSummary, 'lists' | 'pending' | 'completed' | 'trashed'> }) {
@@ -41,6 +61,7 @@ function Counts({ summary }: { summary: Pick<BackupSummary, 'lists' | 'pending' 
 export function BackupPanel() {
   const feedback = useFeedback();
   const { tasks, lists } = useData();
+  const shoppingData = useShopping();
   const settings = useSettings();
   const fileInput = useRef<HTMLInputElement>(null);
   const chooseButton = useRef<HTMLButtonElement>(null);
@@ -57,6 +78,13 @@ export function BackupPanel() {
     pending: tasks.filter((t) => t.deletedAt === null && t.status === 'pending').length,
     completed: tasks.filter((t) => t.deletedAt === null && t.status === 'completed').length,
     trashed: tasks.filter((t) => t.deletedAt !== null).length,
+  };
+  const currentShopping: ShoppingSummary = {
+    lists: shoppingData.lists.length,
+    activeLists: shoppingData.lists.filter((l) => l.status !== 'finished').length,
+    finishedLists: shoppingData.lists.filter((l) => l.status === 'finished').length,
+    purchases: shoppingData.purchases.filter((p) => p.status === 'active').length,
+    voided: shoppingData.purchases.filter((p) => p.status === 'voided').length,
   };
 
   const doExport = async (): Promise<boolean> => {
@@ -123,8 +151,8 @@ export function BackupPanel() {
       <section className={styles.section} aria-labelledby="export-title">
         <h2 id="export-title">Exportar dados</h2>
         <p>
-          Gera um arquivo JSON com listas, tarefas pendentes, concluídas, Lixeira e etapas. Guarde-o onde preferir ou
-          use-o para restaurar a conta depois.
+          Gera um arquivo JSON com listas, tarefas pendentes, concluídas, Lixeira, etapas e o módulo Compras (listas,
+          produtos, mercados e compras registradas). Guarde-o onde preferir ou use-o para restaurar a conta depois.
         </p>
         <div>
           <Button variant="primary" icon={<Download size={18} />} onClick={() => void doExport()} disabled={exporting} aria-busy={exporting}>
@@ -200,8 +228,10 @@ export function BackupPanel() {
                   {pending ? formatInstant(pending.summary.exportedAt) : ''}) contém:
                 </p>
                 {pending ? <Counts summary={pending.summary} /> : null}
+                {pending ? <ShoppingCounts counts={pending.summary.shopping} /> : null}
                 <p>Hoje a sua conta tem:</p>
                 <Counts summary={current} />
+                <ShoppingCounts counts={currentShopping} />
                 <p>
                   Ao confirmar, <strong>tudo isso será substituído</strong> pelo conteúdo do arquivo. Não há mesclagem e a
                   ação não pode ser desfeita. Se quiser, exporte os dados atuais antes.
